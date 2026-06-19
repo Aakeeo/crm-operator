@@ -1,0 +1,84 @@
+/* crm-operator — shared stylesheet. One look for every page. */
+:root {
+  --bg: #fbfaf8;
+  --card: #ffffff;
+  --ink: #1c1b19;
+  --muted: #6b6862;
+  --line: #e7e3dc;
+  --accent: #3b5bdb;
+  --accent-soft: #edf0fd;
+  --good: #2f9e44;
+  --warn: #e8590c;
+  --bad: #c92a2a;
+  --maxw: 880px;
+  font-size: 16px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 32px 24px 96px; }
+
+/* Top bar */
+.topbar { border-bottom: 1px solid var(--line); background: var(--card); }
+.topbar .wrap { padding: 14px 24px; display: flex; align-items: baseline; gap: 18px; }
+.brand { font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+.brand:hover { text-decoration: none; }
+.topnav { display: flex; gap: 16px; font-size: .92rem; }
+.topnav a { color: var(--muted); }
+
+/* Headings */
+h1 { font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 4px; }
+h2 { font-size: 1.05rem; letter-spacing: -.01em; margin: 30px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.kicker { text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; color: var(--muted); font-weight: 600; }
+.subtle { color: var(--muted); }
+
+/* Cards & grids */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+.grid { display: grid; gap: 14px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 18px 0 8px; }
+.kpi .n { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
+.kpi .n.bad { color: var(--bad); }
+.kpi .l { font-size: .8rem; color: var(--muted); }
+
+/* Meta line under an entity title */
+.meta { display: flex; flex-wrap: wrap; gap: 8px 14px; color: var(--muted); font-size: .9rem; margin: 6px 0 4px; }
+.meta b { color: var(--ink); font-weight: 600; }
+
+/* Badges */
+.badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: .75rem; font-weight: 600; border: 1px solid var(--line); background: #f5f3ef; color: var(--muted); white-space: nowrap; }
+.badge.accent { background: var(--accent-soft); color: var(--accent); border-color: #d7ddfb; }
+.badge.good { background: #e9f7ed; color: var(--good); border-color: #c6ecd0; }
+.badge.warn { background: #fdeee2; color: var(--warn); border-color: #f6d4ba; }
+.badge.bad  { background: #fbe9e9; color: var(--bad);  border-color: #f3c9c9; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr.overdue td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+tfoot td { border-top: 2px solid var(--line); font-variant-numeric: tabular-nums; }
+
+/* Prose (rendered markdown sections) */
+.prose p { margin: .5em 0; }
+.prose ul { margin: .4em 0; padding-left: 1.25em; }
+.prose li { margin: .2em 0; }
+.prose code { background: #f1efe9; padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+.callout { border-left: 3px solid var(--line); padding: 4px 14px; color: var(--muted); background: #faf8f4; border-radius: 4px; }
+
+.related a { display: inline-block; margin: 2px 10px 2px 0; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.tag { font-size: .72rem; color: var(--muted); background: #f1efe9; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; }
+.empty { color: var(--muted); font-style: italic; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+hr { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
+.footnote { margin-top: 40px; color: var(--muted); font-size: .82rem; }
