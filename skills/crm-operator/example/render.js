@@ -326,9 +326,9 @@
         .catch(function () {
           preview(meta.accent);
           var b = document.getElementById("brand"); if (b) b.textContent = meta.business || "CRM";
-          status.textContent = "Previewed (open via the local server to save to disk).";
+          status.textContent = "Previewed — couldn't reach the save endpoint.";
           document.getElementById("save-fallback").innerHTML =
-            '<div class="callout" style="margin-top:14px">Not served locally, so I can\'t write to disk. Paste this into <code>data.js</code> (or ask your agent):<br><br><code>meta: ' + esc(JSON.stringify(meta)) + ',</code></div>';
+            '<div class="callout" style="margin-top:14px">Couldn\'t write to disk. The CRM must be served by crm-operator\'s own server (<code>scripts/serve.mjs</code>) — a plain static server or <code>file://</code> can\'t save. Restart it with <code>serve.mjs</code>, or paste this into <code>data.js</code>:<br><br><code>meta: ' + esc(JSON.stringify(meta)) + ',</code></div>';
         });
     });
   }
