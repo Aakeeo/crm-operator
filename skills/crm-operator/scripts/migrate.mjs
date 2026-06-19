@@ -107,7 +107,7 @@ function readEntities(type) {
   return out;
 }
 
-const CRM = {};
+const CRM = { meta: { business: process.env.BUSINESS || "", tagline: process.env.TAGLINE || "", accent: process.env.ACCENT || "" } };
 let total = 0;
 for (const type of Object.keys(DIRS)) {
   CRM[type] = readEntities(type);

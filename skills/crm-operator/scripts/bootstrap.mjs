@@ -14,7 +14,9 @@ mkdirSync(target, { recursive: true });
 for (const f of readdirSync(ENGINE)) copyFileSync(join(ENGINE, f), join(target, f)); // engine + engine.json
 
 const seed = {
-  "data.js": "window.CRM = {\n  contacts: {},\n  companies: {},\n  deals: {},\n  interactions: {},\n  tasks: {}\n};\n",
+  "data.js": "window.CRM = {\n" +
+    "  meta: { business: \"\", tagline: \"\", accent: \"\" },\n" +
+    "  contacts: {},\n  companies: {},\n  deals: {},\n  interactions: {},\n  tasks: {}\n};\n",
   "MISSION.md": "# Mission\n\n_Who are you, what do you sell, and what are your current goals? The CRM uses this to prioritize._\n",
   "NOTES.md": "# Notes\n\n_Working notes and preferences for how this CRM should be maintained._\n",
   "log.md": "# Activity Log\n",

@@ -28,14 +28,18 @@ log.md         ← append-only activity log
 
 ## Data shape
 
-`data.js` is one assignment: `window.CRM = { contacts: {}, companies: {}, deals: {}, interactions: {}, tasks: {} }`. Each bucket maps `id → entity`. The **id is the slug** of the entity's title: lowercase, non-alphanumeric → `-` (e.g. `"Sarah Chen"` → `sarah-chen`, `"Meridian Health - Platform Migration"` → `meridian-health-platform-migration`). Relationships are stored as **ids** (`deal.company = "meridian-health"`). Free-text body lives in a `sections` object (`{ "Background": "markdown…" }`); section prose may use `[[Wikilinks]]` and they resolve automatically. Auto/computed sections (Interaction History, Linked Deals, Key Contacts, Active Deals) are **not stored** — the engine computes them. Per-entity fields: see [formats/](formats/).
+`data.js` is one assignment: `window.CRM = { meta: {...}, contacts: {}, companies: {}, deals: {}, interactions: {}, tasks: {} }`. **`meta`** carries the branding — `{ business: "Acme", tagline: "Sales CRM", accent: "#4f46e5" }`. The whole UI re-themes from `meta.accent` (one color drives the palette), and `meta.business` names the app in the header. Set these during bootstrap. Each bucket maps `id → entity`. The **id is the slug** of the entity's title: lowercase, non-alphanumeric → `-` (e.g. `"Sarah Chen"` → `sarah-chen`, `"Meridian Health - Platform Migration"` → `meridian-health-platform-migration`). Relationships are stored as **ids** (`deal.company = "meridian-health"`). Free-text body lives in a `sections` object (`{ "Background": "markdown…" }`); section prose may use `[[Wikilinks]]` and they resolve automatically. Auto/computed sections (Interaction History, Linked Deals, Key Contacts, Active Deals) are **not stored** — the engine computes them. Per-entity fields: see [formats/](formats/).
 
 ## Workflows
 
 ### Bootstrap (set up a new CRM)
-1. Ask where the vault should live; ask the 2–3 questions needed to draft `MISSION.md` (who they are, what they sell, current goals).
-2. Run `node scripts/bootstrap.mjs <targetDir>` — copies the engine and writes an empty `data.js` + `MISSION.md`/`NOTES.md`/`log.md`. Then fill in `MISSION.md`.
-3. Offer to onboard from a data source (see Connectors).
+1. **Ask what their business is called** (and, optionally, a one-line tagline and a brand color) — plus the 2–3 questions to draft `MISSION.md` (who they are, what they sell, current goals).
+2. Run `node scripts/bootstrap.mjs <targetDir>`, then set `data.js`'s `meta` (`business`, `tagline`, `accent`) and fill in `MISSION.md`. The UI re-themes from `meta.accent`.
+3. **Serve it** (see below) and give the user the URL.
+4. Offer to onboard from a data source (see Connectors).
+
+### Serve (make it reachable)
+Whenever you open or work on a CRM, run `node scripts/serve.mjs <vaultDir>` **in the background** and give the user `http://127.0.0.1:8787`. It's a zero-dependency static server and idempotent (re-running just reports the URL), so the CRM always has a real, professional URL instead of a `file://` path. Re-running after edits isn't needed — just refresh the browser.
 
 ### Ingest (file a raw source)
 1. Read the source completely. 2. Extract people, companies, deals, dates, action items.

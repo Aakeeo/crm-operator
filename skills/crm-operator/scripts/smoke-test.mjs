@@ -12,7 +12,8 @@ let captured = "";
 function makeEnv(search) {
   globalThis.window = {};
   globalThis.document = {
-    _el: { set innerHTML(v) { captured = v; }, get innerHTML() { return captured; } },
+    _el: { set innerHTML(v) { captured = v; }, get innerHTML() { return captured; }, set textContent(v) {}, get textContent() { return ""; } },
+    documentElement: { style: { setProperty() {} } },
     getElementById() { return this._el; },
     set title(v) {}, get title() { return ""; }
   };

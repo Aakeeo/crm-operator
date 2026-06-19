@@ -12,11 +12,16 @@ and your pipeline current. You browse it as a small, self-contained website: ope
 ## Install
 
 ```bash
-npx skills add Aakeeo/crm-operator
+# Claude Code — copies straight into .claude/skills/ (recommended)
+npx skills add Aakeeo/crm-operator --agent claude-code
 ```
 
-This installs the `crm-operator` skill for Claude Code, Cursor, Codex, and other
-agents. Update later with `npx skills update`.
+Update later with `npx skills update`. Works for Cursor, Codex, and other agents too —
+just drop the `--agent` flag to pick interactively.
+
+> **Claude Code tip:** if you choose the *Universal* (`.agents/skills/`) install, Claude Code
+> reads from `.claude/skills/`, so you need a link: `ln -s ../.agents/skills .claude/skills`
+> (or just use `--agent claude-code` above, which copies directly and avoids this).
 
 ## Quick start
 
@@ -24,7 +29,8 @@ In your agent, just say:
 
 > "Set up a new CRM here."
 
-The agent scaffolds a vault (a few HTML files + a `data.js`), then you can:
+It asks what your **business is called** (and an optional brand color), scaffolds a vault,
+**serves it at `http://127.0.0.1:8787`**, and themes the whole UI around your brand. Then you can:
 
 - **Ingest** — "Process these meeting notes" → it files every contact/company/deal/task.
 - **Query** — "What's my open pipeline?" / "What follow-ups are overdue?"

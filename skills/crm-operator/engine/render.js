@@ -4,6 +4,7 @@
 (function () {
   "use strict";
   var CRM = window.CRM || {};
+  var META = CRM.meta || {};
   var TYPES = ["contacts", "companies", "deals", "interactions", "tasks"];
   var SINGULAR = { contacts: "contact", companies: "company", deals: "deal", interactions: "interaction", tasks: "task" };
   var PLURAL = { contact: "contacts", company: "companies", deal: "deals", interaction: "interactions", task: "tasks" };
@@ -91,6 +92,13 @@
       : '<p class="empty">None.</p>');
   }
   function mount(html) { document.getElementById("app").innerHTML = html; }
+  function applyBrand() {
+    var root = document.documentElement;
+    if (META.accent && root && root.style) root.style.setProperty("--accent", META.accent);
+    var b = document.getElementById("brand");
+    if (b) b.textContent = META.business || "CRM";
+    document.title = (META.business ? META.business + " · " : "") + "CRM";
+  }
   function tagline(e) {
     if (!e.tags || !e.tags.length) return "";
     return '<div class="tags">' + e.tags.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>";
@@ -206,6 +214,7 @@
 
   // ---- home / dashboards ---------------------------------------------------
   function renderHome() {
+    applyBrand();
     var deals = all("deal");
     var open = deals.filter(function (d) { return d.stage !== "closed-lost" && d.stage !== "closed-won"; });
     var pipeline = open.reduce(function (s, d) { return s + (d.value || 0); }, 0);
@@ -217,9 +226,9 @@
     var kpis = '<div class="grid kpis">' + [
       kpi(money(pipeline), "Open pipeline"),
       kpi(money(Math.round(weighted)), "Weighted"),
-      kpi(open.length, "Open deals"),
-      kpi(all("contact").length, "Contacts"),
-      kpi(overdue.length, "Overdue tasks", overdue.length ? "bad" : "")
+      kpi(open.length, "Open deals", "plain"),
+      kpi(all("contact").length, "Contacts", "plain"),
+      kpi(overdue.length, "Overdue tasks", overdue.length ? "bad" : "plain")
     ].join("") + "</div>";
 
     var stageOrder = ["lead", "qualified", "proposal", "negotiation", "closed-won"];
@@ -238,7 +247,8 @@
     var ints = all("interaction").sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).slice(0, 8);
 
     mount(
-      '<p class="kicker">CRM</p><h1>Home</h1>' + kpis +
+      '<p class="kicker">' + esc(META.business || "CRM") + "</p><h1>Home</h1>" +
+      (META.tagline ? '<p class="subtle">' + esc(META.tagline) + "</p>" : "") + kpis +
       "<h2>Pipeline</h2>" + (pipeRows.length ? table(["Deal", "Company", "Stage", "Value", "Prob"], pipeRows,
         ["<strong>Total</strong>", "", "", { num: "<strong>" + money(pipeline) + "</strong>" }, ""]) : '<p class="empty">No open deals.</p>') +
       "<h2>Follow-ups</h2>" + (taskRows.length ? tableRows(["Task", "Priority", "Due"], taskRows) : '<p class="empty">Nothing open.</p>') +
@@ -264,6 +274,7 @@
   // ---- router --------------------------------------------------------------
   var DISPATCH = { contact: renderContact, company: renderCompany, deal: renderDeal, interaction: renderInteraction, task: renderTask };
   function renderView() {
+    applyBrand();
     var q = new URLSearchParams(location.search);
     var type = q.get("type"), id = q.get("id");
     var e = get(type, id);
