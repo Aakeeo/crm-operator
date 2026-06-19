@@ -55,6 +55,16 @@ Adding a contact is one edit to `data.js` and zero new files.
 and notes are yours and never overwritten. Upgrade an existing vault's engine in place with
 `node scripts/update-engine.mjs <vault>` — your data is structurally untouched.
 
+## Staying up to date
+
+You don't have to track releases. When a newer version exists, your CRM tells you:
+
+- **In the app** — Home shows a banner: *"A newer version is available — run `npx skills update`."*
+- **In the terminal** — the local server prints the same notice on start.
+
+After `npx skills update`, existing vaults upgrade **automatically the next time they're opened**
+(the server refreshes the engine on start) — your `data.js` is never touched.
+
 ## Connectors (optional)
 
 Connect your own accounts in Claude (`/mcp`) to light these up:

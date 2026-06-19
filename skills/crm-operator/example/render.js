@@ -247,6 +247,7 @@
     var ints = all("interaction").sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }).slice(0, 8);
 
     mount(
+      '<div id="update-banner"></div>' +
       '<p class="kicker">' + esc(META.business || "CRM") + "</p><h1>Home</h1>" +
       (META.tagline ? '<p class="subtle">' + esc(META.tagline) + "</p>" : "") + kpis +
       "<h2>Pipeline</h2>" + (pipeRows.length ? table(["Deal", "Company", "Stage", "Value", "Prob"], pipeRows,
@@ -257,6 +258,16 @@
       })) : '<p class="empty">No interactions yet.</p>') +
       directories()
     );
+    checkForUpdate();
+  }
+  function checkForUpdate() {
+    if (typeof fetch !== "function") return;
+    fetch("__crm").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !j.updateAvailable) return;
+      var el = document.getElementById("update-banner");
+      if (el) el.innerHTML = '<div class="banner">A newer version is available — <b>' + esc(j.latest) +
+        "</b> (you have " + esc(j.version) + "). Run <code>npx skills update</code>, then reopen this CRM.</div>";
+    }).catch(function () {});
   }
   function kpi(n, l, kind) { return '<div class="card kpi"><div class="n' + (kind ? " " + kind : "") + '">' + n + '</div><div class="l">' + esc(l) + "</div></div>"; }
   function tableRows(cols, rows) { // rows: {overdue, cells}
