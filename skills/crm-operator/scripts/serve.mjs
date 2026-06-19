@@ -55,6 +55,25 @@ function saveMeta(body, res) {
   } catch (e) { res.writeHead(500); res.end(String(e)); }
 }
 
+// ---- create a new entity from the New form (insert into data.js) ----
+const BUCKET = { contact: "contacts", company: "companies", deal: "deals", interaction: "interactions", task: "tasks" };
+function createEntity(body, res) {
+  try {
+    const p = JSON.parse(body || "{}");
+    const bucket = BUCKET[p.type];
+    if (!bucket || !p.id || !p.entity) throw new Error("bad payload");
+    const path = join(root, "data.js");
+    let src = readFileSync(path, "utf8");
+    if (src.indexOf('"' + p.id + '":') !== -1) { res.writeHead(409); return res.end("An entry with id \"" + p.id + "\" already exists."); }
+    const re = new RegExp('(["\']?' + bucket + '["\']?\\s*:\\s*\\{)');
+    if (!re.test(src)) throw new Error("bucket " + bucket + " not found in data.js");
+    const entry = "\n    " + JSON.stringify(p.id) + ": " + JSON.stringify(p.entity) + ",";
+    src = src.replace(re, (m) => m + entry);
+    writeFileSync(path, src);
+    res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ ok: true, id: p.id }));
+  } catch (e) { res.writeHead(400); res.end(String((e && e.message) || e)); }
+}
+
 // ---- check the repo for a newer version (best-effort, cached) ----
 let latest = null, updateAvailable = false, updatePromise = null;
 function ensureCheck() {
@@ -82,6 +101,9 @@ const server = createServer(async (req, res) => {
   const path0 = (req.url || "/").split("?")[0];
   if (req.method === "POST" && path0 === "/__save-meta") {
     let body = ""; req.on("data", (c) => (body += c)); req.on("end", () => saveMeta(body, res)); return;
+  }
+  if (req.method === "POST" && path0 === "/__create") {
+    let body = ""; req.on("data", (c) => (body += c)); req.on("end", () => createEntity(body, res)); return;
   }
   if (path0 === "/__crm") {
     await ensureCheck();

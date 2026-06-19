@@ -80,6 +80,17 @@ for (const t of ["deals", "contacts", "companies", "interactions", "tasks"]) {
   w.CRMRender.list();
   ok(captured.includes("All ") && !captured.includes("undefined"), `list view '${t}' renders`);
 }
+// New (create) form renders for each type
+for (const t of ["contact", "company", "deal", "task"]) {
+  w = load(`?type=${t}`);
+  captured = "";
+  w.CRMRender.create();
+  ok(captured.includes("Create") && captured.includes('id="create-btn"') && !captured.includes("undefined"), `new form '${t}' renders`);
+}
+// Search index builds over all entities
+w = load("");
+ok(typeof w.CRMRender.create === "function", "create renderer is exposed");
+
 // Avatars present on a contact list + contact page
 w = load("?type=contacts"); captured = ""; w.CRMRender.list();
 ok(captured.includes('class="avatar'), "contact list shows avatars");

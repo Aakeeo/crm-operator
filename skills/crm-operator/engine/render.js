@@ -348,6 +348,115 @@
       (rows.length ? table(cfg.head, rows.map(cfg.cell)) : '<p class="empty">Nothing here yet.</p>'));
   }
 
+  // ---- search --------------------------------------------------------------
+  function searchIndex() {
+    var idx = [];
+    TYPES.forEach(function (plur) {
+      var sing = SINGULAR[plur];
+      Object.keys(CRM[plur] || {}).forEach(function (id) {
+        var e = CRM[plur][id], sub = "";
+        if (sing === "contact") sub = [e.role, e.company && (get("company", e.company) || {}).name, e.email].filter(Boolean).join(" · ");
+        else if (sing === "company") sub = [e.industry, e.location].filter(Boolean).join(" · ");
+        else if (sing === "deal") sub = [e.company && (get("company", e.company) || {}).name, e.stage].filter(Boolean).join(" · ");
+        else if (sing === "interaction") sub = e.date || "";
+        else if (sing === "task") sub = [e.priority, e.due_date].filter(Boolean).join(" · ");
+        var nm = e.name || e.title || id;
+        idx.push({ type: sing, id: id, name: nm, sub: sub, hay: (nm + " " + sub + " " + (e.email || "") + " " + (e.tags || []).join(" ")).toLowerCase() });
+      });
+    });
+    return idx;
+  }
+  function wireSearch() {
+    if (typeof document === "undefined" || !document.getElementById) return;
+    var input = document.getElementById("crm-search");
+    if (!input || typeof document.createElement !== "function") return;
+    var idx = searchIndex();
+    var box = document.createElement("div");
+    box.className = "search-results"; box.style.display = "none";
+    input.parentNode.appendChild(box);
+    function close() { box.style.display = "none"; }
+    function draw(q) {
+      q = q.trim().toLowerCase();
+      if (!q) return close();
+      var hits = idx.filter(function (e) { return e.hay.indexOf(q) !== -1; }).slice(0, 8);
+      box.innerHTML = hits.length ? hits.map(function (h) {
+        return '<a class="sr-item" href="' + href(h.type, h.id) + '">' + avatar(h.name, { size: 22, square: h.type === "company" }) +
+          '<span class="sr-main">' + esc(h.name) + "<small>" + esc(h.sub) + "</small></span><span class=\"badge\">" + esc(h.type) + "</span></a>";
+      }).join("") : '<div class="sr-empty">No matches</div>';
+      box.style.display = "block";
+    }
+    input.addEventListener("input", function () { draw(input.value); });
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { var f = box.querySelector(".sr-item"); if (f) location.href = f.getAttribute("href"); }
+      else if (ev.key === "Escape") { input.value = ""; close(); }
+    });
+    document.addEventListener("click", function (ev) { if (input.parentNode && !input.parentNode.contains(ev.target)) close(); });
+  }
+
+  // ---- new (create an entity, written to data.js via serve.mjs) ------------
+  function optList(type) { return all(type).sort(byName).map(function (e) { return { v: e.id, t: e.name }; }); }
+  function formCfg() {
+    return {
+      contact: { label: "Contact", name: "name", fields: [
+        { k: "name", label: "Name", req: true }, { k: "email", label: "Email" }, { k: "role", label: "Role" },
+        { k: "company", label: "Company", sel: optList("company") }, { k: "status", label: "Status", sel: ["prospect", "active", "inactive", "churned"] }] },
+      company: { label: "Company", name: "name", fields: [
+        { k: "name", label: "Name", req: true }, { k: "industry", label: "Industry" }, { k: "location", label: "Location" },
+        { k: "status", label: "Status", sel: ["prospect", "customer", "partner", "churned"] }, { k: "arr_potential", label: "ARR potential", num: true }] },
+      deal: { label: "Deal", name: "name", fields: [
+        { k: "name", label: "Deal name", req: true }, { k: "company", label: "Company", sel: optList("company") },
+        { k: "primary_contact", label: "Primary contact", sel: optList("contact") }, { k: "value", label: "Value", num: true },
+        { k: "stage", label: "Stage", sel: ["lead", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"] }, { k: "probability", label: "Probability %", num: true }] },
+      task: { label: "Task", name: "title", fields: [
+        { k: "title", label: "Title", req: true }, { k: "priority", label: "Priority", sel: ["high", "medium", "low"] },
+        { k: "due_date", label: "Due date (YYYY-MM-DD)" }, { k: "status", label: "Status", sel: ["todo", "in-progress", "done"] }] },
+    };
+  }
+  function renderNew() {
+    applyBrand(); setActiveNav(null);
+    var cfgs = formCfg();
+    var type = new URLSearchParams(location.search).get("type") || "contact";
+    if (!cfgs[type]) type = "contact";
+    var cfg = cfgs[type];
+    var tabs = Object.keys(cfgs).map(function (t) { return '<a href="new.html?type=' + t + '" class="newtab' + (t === type ? " active" : "") + '">' + esc(cfgs[t].label) + "</a>"; }).join("");
+    var fields = cfg.fields.map(function (f) {
+      var input;
+      if (f.sel) {
+        var os = Array.isArray(f.sel) ? f.sel.map(function (s) { return { v: s, t: s }; }) : f.sel;
+        input = '<select id="f-' + f.k + '" class="inp"><option value="">—</option>' + os.map(function (o) { return '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; }).join("") + "</select>";
+      } else input = '<input id="f-' + f.k + '" class="inp" type="text"' + (f.num ? ' inputmode="numeric"' : "") + ">";
+      return '<label class="fld">' + esc(f.label) + (f.req ? ' <span style="color:var(--bad)">*</span>' : "") + "</label>" + input;
+    }).join("");
+    mount(
+      '<p class="kicker">New</p><h1>Create</h1><div class="newtabs">' + tabs + "</div>" +
+      '<div class="card" style="max-width:560px">' + fields +
+      '<div style="margin-top:18px;display:flex;gap:10px;align-items:center"><button id="create-btn" class="btn">Create ' + esc(cfg.label) + '</button><span id="create-status" class="subtle"></span></div></div>' +
+      '<div id="create-fallback"></div>'
+    );
+    wireNew(type, cfg);
+  }
+  function wireNew(type, cfg) {
+    var btn = document.getElementById("create-btn");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var nameVal = valOf("f-" + cfg.name).trim();
+      var status = document.getElementById("create-status");
+      if (!nameVal) { status.textContent = "Name is required."; return; }
+      var id = slug(nameVal), entity = { type: type, id: id };
+      cfg.fields.forEach(function (f) { var v = valOf("f-" + f.k); if (v === "" || v == null) return; entity[f.k] = f.num ? Number(v) : v; });
+      entity.name = (type === "task") ? entity.title : nameVal;
+      entity.created = today(); entity.updated = today(); entity.sections = {};
+      status.textContent = "Creating…";
+      fetch("__create", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: type, id: id, entity: entity }) })
+        .then(function (r) { return r.ok ? r.json() : r.text().then(function (t) { throw new Error(t); }); })
+        .then(function (j) { status.textContent = "Created — opening…"; setTimeout(function () { location.href = href(type, j.id || id); }, 400); })
+        .catch(function (e) {
+          status.textContent = "Couldn't save.";
+          document.getElementById("create-fallback").innerHTML = '<div class="callout" style="margin-top:14px">Creating writes to <code>data.js</code>, so the CRM must be served by <code>serve.mjs</code> (not a static server or <code>file://</code>). <br>' + esc(String((e && e.message) || e)) + "</div>";
+        });
+    });
+  }
+
   // ---- router --------------------------------------------------------------
   var DISPATCH = { contact: renderContact, company: renderCompany, deal: renderDeal, interaction: renderInteraction, task: renderTask };
   function renderView() {
@@ -413,5 +522,6 @@
   }
   function valOf(id) { var e = document.getElementById(id); return e ? e.value : ""; }
 
-  window.CRMRender = { home: renderHome, view: renderView, settings: renderSettings, list: renderList };
+  window.CRMRender = { home: renderHome, view: renderView, settings: renderSettings, list: renderList, create: renderNew };
+  wireSearch();
 })();
