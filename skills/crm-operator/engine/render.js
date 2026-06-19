@@ -99,6 +99,32 @@
     if (b) b.textContent = META.business || "CRM";
     document.title = (META.business ? META.business + " · " : "") + "CRM";
   }
+
+  // ---- avatars (deterministic initials chip) -------------------------------
+  var AV_PALETTE = [["#4f46e5", "#eef2ff"], ["#2563eb", "#eff6ff"], ["#7c3aed", "#f5f3ff"], ["#16a34a", "#f0fdf4"], ["#d97706", "#fffbeb"]];
+  function initials(name) {
+    var p = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return "?";
+    if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+    return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+  }
+  function nhash(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+  function avatar(name, opts) {
+    opts = opts || {}; var size = opts.size || 24, pair = AV_PALETTE[nhash(String(name || "")) % AV_PALETTE.length];
+    return '<span class="avatar' + (opts.square ? " sq" : "") + '" title="' + esc(name) + '" style="width:' + size + "px;height:" + size + "px;font-size:" + Math.round(size * 0.38) + "px;color:" + pair[0] + ";background:" + pair[1] + '">' + esc(initials(name)) + "</span>";
+  }
+  function avatarLink(type, id, square) {
+    var e = get(type, id), name = (e && e.name) || id;
+    return '<span class="av-cell">' + avatar(name, { size: 24, square: square }) + link(type, id) + "</span>";
+  }
+  function chip(type, id, square) {
+    var e = get(type, id), name = (e && e.name) || id;
+    return '<a href="' + href(type, id) + '" class="chip">' + avatar(name, { size: 22, square: square }) + esc(name) + "</a>";
+  }
+  function setActiveNav(key) {
+    var links = document.querySelectorAll(".topnav a");
+    for (var i = 0; i < links.length; i++) if (links[i].classList) links[i].classList.toggle("active", links[i].getAttribute("data-nav") === key);
+  }
   function tagline(e) {
     if (!e.tags || !e.tags.length) return "";
     return '<div class="tags">' + e.tags.map(function (t) { return '<span class="tag">' + esc(t) + "</span>"; }).join("") + "</div>";
@@ -110,7 +136,7 @@
     var ints = all("interaction").filter(function (i) { return (i.participants || []).indexOf(e.id) !== -1; })
       .sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
     var head =
-      "<p class=\"kicker\">Contact</p><h1>" + esc(e.name) + "</h1>" +
+      "<p class=\"kicker\">Contact</p><h1 class=\"has-av\">" + avatar(e.name, { size: 40 }) + "<span>" + esc(e.name) + "</span></h1>" +
       '<div class="meta">' +
       (e.role ? "<span><b>" + esc(e.role) + "</b></span>" : "") +
       (e.company ? "<span>" + link("company", e.company) + "</span>" : "") +
@@ -129,7 +155,7 @@
     var contacts = all("contact").filter(function (c) { return c.company === e.id; });
     var deals = all("deal").filter(function (d) { return d.company === e.id && d.stage !== "closed-lost"; });
     var head =
-      "<p class=\"kicker\">Company</p><h1>" + esc(e.name) + "</h1>" +
+      "<p class=\"kicker\">Company</p><h1 class=\"has-av\">" + avatar(e.name, { size: 40, square: true }) + "<span>" + esc(e.name) + "</span></h1>" +
       '<div class="meta">' +
       (e.industry ? "<span><b>" + esc(e.industry) + "</b></span>" : "") +
       (e.size ? "<span>" + esc(e.size) + "</span>" : "") +
@@ -139,7 +165,7 @@
       (e.arr_potential ? "<span>ARR potential <b>" + money(e.arr_potential) + "</b></span>" : "") +
       "</div>";
     var ctable = contacts.length ? table(["Name", "Role", "Status", "Last contact"], contacts.map(function (c) {
-      return [link("contact", c.id), esc(c.role || ""), badge(c.status || "—", STATUS_KIND[c.status]), esc(c.last_contacted || "")];
+      return [avatarLink("contact", c.id), esc(c.role || ""), badge(c.status || "—", STATUS_KIND[c.status]), { num: c.last_contacted || "—" }];
     })) : '<p class="empty">No contacts yet.</p>';
     var dtable = deals.length ? table(["Deal", "Stage", "Value", "Prob"], deals.map(function (d) {
       return [link("deal", d.id), badge(d.stage, STAGE_KIND[d.stage]), { num: money(d.value) }, { num: (d.probability || 0) + "%" }];
@@ -205,7 +231,7 @@
   }
   function table(cols, rows, foot) {
     var head = "<tr>" + cols.map(function (c) {
-      return /prob|value/i.test(c) ? '<th class="num">' + esc(c) + "</th>" : "<th>" + esc(c) + "</th>";
+      return /prob|value|arr|due|close|contact/i.test(c) ? '<th class="num">' + esc(c) + "</th>" : "<th>" + esc(c) + "</th>";
     }).join("") + "</tr>";
     var body = rows.map(function (r) { return "<tr>" + r.map(cell).join("") + "</tr>"; }).join("");
     var footer = foot ? "<tfoot><tr>" + foot.map(cell).join("") + "</tr></tfoot>" : "";
@@ -215,6 +241,7 @@
   // ---- home / dashboards ---------------------------------------------------
   function renderHome() {
     applyBrand();
+    setActiveNav("home");
     var deals = all("deal");
     var open = deals.filter(function (d) { return d.stage !== "closed-lost" && d.stage !== "closed-won"; });
     var pipeline = open.reduce(function (s, d) { return s + (d.value || 0); }, 0);
@@ -235,7 +262,7 @@
     var pipeRows = open.slice().sort(function (a, b) {
       return stageOrder.indexOf(b.stage) - stageOrder.indexOf(a.stage) || (b.value || 0) - (a.value || 0);
     }).map(function (d) {
-      return [link("deal", d.id), d.company ? link("company", d.company) : "", badge(d.stage, STAGE_KIND[d.stage]),
+      return [link("deal", d.id), d.company ? avatarLink("company", d.company, true) : "", badge(d.stage, STAGE_KIND[d.stage]),
         { num: money(d.value) }, { num: (d.probability || 0) + "%" }];
     });
 
@@ -276,16 +303,56 @@
     return "<table><thead>" + head + "</thead><tbody>" + body + "</tbody></table>";
   }
   function directories() {
-    var c = all("contact").sort(byName).map(function (x) { return link("contact", x.id); });
-    var co = all("company").sort(byName).map(function (x) { return link("company", x.id); });
-    return relatedBlock("Contacts", c) + relatedBlock("Companies", co);
+    var c = all("contact").sort(byName).map(function (x) { return chip("contact", x.id); });
+    return relatedBlock("Contacts", c);
   }
   function byName(a, b) { return (a.name || "").localeCompare(b.name || ""); }
+
+  // ---- list views ----------------------------------------------------------
+  var LIST_CFG = {
+    deals: {
+      kicker: "Deals", title: "All Deals", rows: function () { return all("deal"); },
+      head: ["Deal", "Company", "Stage", "Value", "Prob"],
+      cell: function (d) { return [link("deal", d.id), d.company ? avatarLink("company", d.company, true) : "", badge(d.stage, STAGE_KIND[d.stage]), { num: money(d.value) }, { num: (d.probability || 0) + "%" }]; },
+    },
+    contacts: {
+      kicker: "Contacts", title: "All Contacts", rows: function () { return all("contact").sort(byName); },
+      head: ["Name", "Role", "Company", "Status", "Last contact"],
+      cell: function (c) { return [avatarLink("contact", c.id), esc(c.role || ""), c.company ? link("company", c.company) : "", badge(c.status || "—", STATUS_KIND[c.status]), { num: c.last_contacted || "—" }]; },
+    },
+    companies: {
+      kicker: "Companies", title: "All Companies", rows: function () { return all("company").sort(byName); },
+      head: ["Company", "Industry", "Location", "Status", "ARR potential"],
+      cell: function (c) { return [avatarLink("company", c.id, true), esc(c.industry || ""), esc(c.location || ""), badge(c.status || "—", STATUS_KIND[c.status]), { num: c.arr_potential ? money(c.arr_potential) : "—" }]; },
+    },
+    interactions: {
+      kicker: "Activity", title: "All Interactions", rows: function () { return all("interaction").sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }); },
+      head: ["Due", "Interaction", "Company", "Type"],
+      cell: function (i) { return [{ num: i.date || "" }, link("interaction", i.id), i.company ? link("company", i.company) : "", esc(i.interaction_type || "")]; },
+    },
+    tasks: {
+      kicker: "Tasks", title: "All Tasks", rows: function () { return all("task").sort(function (a, b) { return (a.due_date || "").localeCompare(b.due_date || ""); }); },
+      head: ["Task", "Priority", "Due", "Status"],
+      cell: function (t) { return [link("task", t.id, t.title || t.name), badge(t.priority || "medium", PRIO_KIND[t.priority]), { num: t.due_date || "—" }, badge(t.status || "todo", t.status === "done" ? "good" : "")]; },
+    },
+  };
+  function renderList() {
+    applyBrand();
+    var type = new URLSearchParams(location.search).get("type");
+    setActiveNav(type);
+    var cfg = LIST_CFG[type];
+    if (!cfg) { mount('<h1>Not found</h1><p class="empty">Unknown list "' + esc(type || "") + '".</p><p><a href="index.html">← Home</a></p>'); return; }
+    document.title = cfg.title + " · CRM";
+    var rows = cfg.rows();
+    mount('<p class="kicker">' + esc(cfg.kicker) + "</p><h1>" + esc(cfg.title) + ' <span class="count">· ' + rows.length + "</span></h1>" +
+      (rows.length ? table(cfg.head, rows.map(cfg.cell)) : '<p class="empty">Nothing here yet.</p>'));
+  }
 
   // ---- router --------------------------------------------------------------
   var DISPATCH = { contact: renderContact, company: renderCompany, deal: renderDeal, interaction: renderInteraction, task: renderTask };
   function renderView() {
     applyBrand();
+    setActiveNav(null);
     var q = new URLSearchParams(location.search);
     var type = q.get("type"), id = q.get("id");
     var e = get(type, id);
@@ -301,6 +368,7 @@
   }
   function renderSettings() {
     applyBrand();
+    setActiveNav("settings");
     mount(
       '<p class="kicker">Settings</p><h1>Branding</h1>' +
       '<p class="subtle">Personalize how your CRM looks. Saves to <code>data.js</code> when served locally.</p>' +
@@ -345,5 +413,5 @@
   }
   function valOf(id) { var e = document.getElementById(id); return e ? e.value : ""; }
 
-  window.CRMRender = { home: renderHome, view: renderView, settings: renderSettings };
+  window.CRMRender = { home: renderHome, view: renderView, settings: renderSettings, list: renderList };
 })();

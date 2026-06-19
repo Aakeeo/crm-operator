@@ -9,7 +9,13 @@
 <body>
   <div class="topbar"><div class="wrap">
     <a class="brand" id="brand" href="index.html">CRM</a>
-    <nav class="topnav"><a href="index.html">Home</a><a href="settings.html">Settings</a></nav>
+    <nav class="topnav">
+      <a href="index.html" data-nav="home">Home</a>
+      <a href="list.html?type=deals" data-nav="deals">Deals</a>
+      <a href="list.html?type=contacts" data-nav="contacts">Contacts</a>
+      <a href="list.html?type=companies" data-nav="companies">Companies</a>
+      <a href="settings.html" data-nav="settings">Settings</a>
+    </nav>
   </div></div>
   <main class="wrap"><div id="app"></div>
     <p class="footnote">Maintained by the <code>crm-operator</code> skill. Data lives in <code>data.js</code>.</p>

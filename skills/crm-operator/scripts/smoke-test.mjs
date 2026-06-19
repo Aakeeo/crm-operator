@@ -14,6 +14,7 @@ function makeEnv(search) {
   globalThis.document = {
     _el: { set innerHTML(v) { captured = v; }, get innerHTML() { return captured; }, set textContent(v) {}, get textContent() { return ""; }, addEventListener() {}, value: "", style: { setProperty() {} } },
     documentElement: { style: { setProperty() {} } },
+    querySelectorAll() { return []; },
     getElementById() { return this._el; },
     set title(v) {}, get title() { return ""; }
   };
@@ -71,6 +72,19 @@ w = load("");
 captured = "";
 w.CRMRender.settings();
 ok(captured.includes("Branding") && captured.includes('id="f-business"'), "settings page renders the branding form");
+
+// List views render for each type
+for (const t of ["deals", "contacts", "companies", "interactions", "tasks"]) {
+  w = load(`?type=${t}`);
+  captured = "";
+  w.CRMRender.list();
+  ok(captured.includes("All ") && !captured.includes("undefined"), `list view '${t}' renders`);
+}
+// Avatars present on a contact list + contact page
+w = load("?type=contacts"); captured = ""; w.CRMRender.list();
+ok(captured.includes('class="avatar'), "contact list shows avatars");
+w = load("?type=company&id=meridian-health"); captured = ""; w.CRMRender.view();
+ok(captured.includes('class="avatar sq"'), "company page shows a square avatar");
 
 // Task related links must resolve (regression for the [[..]] bug)
 w = load("?type=task&id=confirm-thursday-sandbox-walkthrough");
