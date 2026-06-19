@@ -14,7 +14,8 @@ A CRM vault has exactly these files:
 ```
 data.js        ← THE database. window.CRM = { contacts, companies, deals, interactions, tasks }
 render.js      ← shared engine: draws any page from data.js (never entity-specific)
-styles.css     ← shared look
+styles.css     ← shared look (design system: Hanken Grotesk + IBM Plex Mono, themed from meta.accent)
+fonts/         ← self-hosted font files, shipped with the engine
 index.html     ← home + dashboards (pipeline, follow-ups, recent activity)
 view.html      ← renders any one entity: view.html?type=deal&id=<slug>
 settings.html  ← in-app branding editor (business name, tagline, accent) — writes meta to data.js via the server

@@ -10,7 +10,7 @@
  * the repo for a newer skill version. Opt out of auto-update with --no-update. */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { readFileSync, writeFileSync, readdirSync, copyFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, join, extname, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,12 +24,19 @@ function cmp(a, b) { const A = String(a).split(".").map(Number), B = String(b).s
 const VERSION = engineVersion(ENGINE) || "0.0.0";
 
 // ---- auto-update the vault engine (never data.js) ----
+function copyDir(src, dst) {            // recursive: engine files + fonts/ subfolder
+  mkdirSync(dst, { recursive: true });
+  for (const e of readdirSync(src, { withFileTypes: true })) {
+    const s = join(src, e.name), d = join(dst, e.name);
+    if (e.isDirectory()) copyDir(s, d); else copyFileSync(s, d);
+  }
+}
 function autoUpdateEngine(vault) {
   if (process.argv.includes("--no-update")) return;
   if (!existsSync(join(vault, "data.js"))) return;
   const have = engineVersion(vault), latest = engineVersion(ENGINE);
   if (!latest || have === latest) return;
-  for (const f of readdirSync(ENGINE)) copyFileSync(join(ENGINE, f), join(vault, f));
+  copyDir(ENGINE, vault);
   console.log(`Engine auto-updated ${have || "none"} → ${latest} (data.js untouched)`);
 }
 

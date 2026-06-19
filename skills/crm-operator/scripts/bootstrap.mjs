@@ -10,8 +10,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ENGINE = resolve(here, "..", "engine");
 const target = resolve(process.argv[2] || ".");
 
-mkdirSync(target, { recursive: true });
-for (const f of readdirSync(ENGINE)) copyFileSync(join(ENGINE, f), join(target, f)); // engine + engine.json
+function copyDir(src, dst) {            // recursive: engine files + fonts/ subfolder
+  mkdirSync(dst, { recursive: true });
+  for (const e of readdirSync(src, { withFileTypes: true })) {
+    const s = join(src, e.name), d = join(dst, e.name);
+    if (e.isDirectory()) copyDir(s, d); else copyFileSync(s, d);
+  }
+}
+copyDir(ENGINE, target); // engine + engine.json + fonts/
 
 const seed = {
   "data.js": "window.CRM = {\n" +
