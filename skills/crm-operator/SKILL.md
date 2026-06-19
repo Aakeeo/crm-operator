@@ -40,7 +40,7 @@ log.md         ← append-only activity log
 4. Offer to onboard from a data source (see Connectors).
 
 ### Serve (make it reachable)
-Whenever you open or work on a CRM, run `node scripts/serve.mjs <vaultDir>` **in the background** and give the user `http://127.0.0.1:8787`. It's a zero-dependency static server and idempotent (re-running just reports the URL), so the CRM always has a real, professional URL instead of a `file://` path. Re-running after edits isn't needed — just refresh the browser.
+Whenever you open or work on a CRM, run `node scripts/serve.mjs <vaultDir>` **in the background** and give the user `http://127.0.0.1:8787`. It's a zero-dependency static server and idempotent (re-running just reports the URL), so the CRM always has a real, professional URL instead of a `file://` path. Re-running after edits isn't needed — just refresh the browser. **On start it also auto-updates the vault's engine** to the latest version (copying engine files, never `data.js`), so simply opening a CRM keeps its UI current. Pass `--no-update` to skip that.
 
 ### Ingest (file a raw source)
 1. Read the source completely. 2. Extract people, companies, deals, dates, action items.
@@ -71,7 +71,7 @@ Optional and user-connected; the CRM works fully without them. Details, workflow
 Run `node scripts/migrate.mjs <vaultDir> <outDir>` to convert an Obsidian-style markdown CRM into `data.js`. Validate with `node scripts/smoke-test.mjs`.
 
 ## Updating a vault's engine
-The skill itself updates via `npx skills update`. To push a newer engine into an **existing** vault, run `node scripts/update-engine.mjs <vaultDir>` — it refreshes only the engine files and bumps `engine.json`'s version, leaving `data.js` and the markdown files untouched. The engine and the data evolve independently, so users keep their data across upgrades.
+The skill itself updates via `npx skills update`. Existing vaults then upgrade **automatically the next time they're served** (see Serve above) — no action needed. For an explicit or headless refresh, run `node scripts/update-engine.mjs <vaultDir>`. Either way only the engine files change; `data.js` and the markdown files are untouched, so users keep their data across upgrades.
 
 ## Rules
 1. Never delete data — append, update, or mark inactive/churned/closed-lost. 2. Always store relationships as ids, both directions discoverable. 3. Dedup by slug before creating. 4. When uncertain, add a `TODO` tag with a note rather than guessing. 5. Keep `log.md` current. 6. Numbers are bare numbers; dates are `YYYY-MM-DD` strings. 7. Only edit `data.js` and the markdown control-plane files — never the engine.

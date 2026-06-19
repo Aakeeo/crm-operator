@@ -5,11 +5,27 @@
  * Run it in the background when opening a CRM so it's always reachable. */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve, join, extname, normalize } from "node:path";
+import { readFileSync, writeFileSync, readdirSync, copyFileSync, existsSync } from "node:fs";
+import { resolve, join, extname, normalize, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = resolve(process.argv[2] || ".");
 const port = Number(process.argv[3] || 8787);
+const ENGINE = resolve(dirname(fileURLToPath(import.meta.url)), "..", "engine");
+
+// Keep the vault's engine current automatically. Runs on every serve: if the
+// vault's engine is older than the skill's, refresh the engine files (never
+// data.js or notes). Opt out with --no-update. This is what makes opening a CRM
+// also quietly upgrade its UI — no separate update step needed.
+function engineVersion(dir) { try { return JSON.parse(readFileSync(join(dir, "engine.json"), "utf8")).version; } catch { return null; } }
+function autoUpdateEngine(vault) {
+  if (process.argv.includes("--no-update")) return;
+  if (!existsSync(join(vault, "data.js"))) return;          // not a CRM vault — don't touch it
+  const have = engineVersion(vault), latest = engineVersion(ENGINE);
+  if (!latest || have === latest) return;
+  for (const f of readdirSync(ENGINE)) copyFileSync(join(ENGINE, f), join(vault, f));
+  console.log(`Engine auto-updated ${have || "none"} → ${latest} (data.js untouched)`);
+}
 
 // Persist branding edits from the in-app Settings page into data.js. Only the
 // single /*@meta*/ line is rewritten — the rest of the file is untouched.
@@ -51,4 +67,5 @@ server.on("error", (e) => {
   if (e.code === "EADDRINUSE") { console.log(`CRM already live at http://127.0.0.1:${port}/`); process.exit(0); }
   throw e;
 });
+autoUpdateEngine(root);
 server.listen(port, "127.0.0.1", () => console.log(`CRM live at http://127.0.0.1:${port}/  (serving ${root})`));
