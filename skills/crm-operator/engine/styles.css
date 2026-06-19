@@ -107,5 +107,13 @@ tfoot td { border-top: 2px solid var(--line); font-variant-numeric: tabular-nums
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 2px; }
 .tag { font-size: .72rem; color: var(--muted); background: #eef0f8; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }
 .empty { color: var(--muted); font-style: italic; }
+
+/* Forms / settings */
+.fld { display: block; margin: 14px 0 5px; font-size: .85rem; font-weight: 600; }
+.inp { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; font: inherit; color: var(--ink); background: #fff; }
+.inp:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.inp-color { width: 46px; height: 40px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+.btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 9px 20px; font: inherit; font-weight: 600; cursor: pointer; }
+.btn:hover { filter: brightness(1.06); }
 hr { border: none; border-top: 1px solid var(--line); margin: 28px 0; }
 .footnote { margin-top: 44px; color: var(--muted); font-size: .82rem; }

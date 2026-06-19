@@ -283,5 +283,56 @@
     DISPATCH[type](e);
   }
 
-  window.CRMRender = { home: renderHome, view: renderView };
+  // ---- settings (in-app branding editor) -----------------------------------
+  function fieldRow(label, key, value, type) {
+    return '<label class="fld">' + esc(label) + "</label>" +
+      '<input id="f-' + key + '" type="' + type + '" value="' + esc(value) + '" class="inp">';
+  }
+  function renderSettings() {
+    applyBrand();
+    mount(
+      '<p class="kicker">Settings</p><h1>Branding</h1>' +
+      '<p class="subtle">Personalize how your CRM looks. Saves to <code>data.js</code> when served locally.</p>' +
+      '<div class="card" style="max-width:540px">' +
+        fieldRow("Business name", "business", META.business || "", "text") +
+        fieldRow("Tagline", "tagline", META.tagline || "", "text") +
+        '<label class="fld">Accent color</label>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<input id="f-accent" type="color" value="' + esc(META.accent || "#4f46e5") + '" class="inp-color">' +
+          '<input id="f-accent-hex" type="text" value="' + esc(META.accent || "#4f46e5") + '" class="inp" style="width:120px">' +
+        "</div>" +
+        '<div style="margin-top:18px;display:flex;gap:10px;align-items:center">' +
+          '<button id="save-brand" class="btn">Save</button>' +
+          '<span id="save-status" class="subtle"></span>' +
+        "</div>" +
+      "</div><div id=\"save-fallback\"></div>"
+    );
+    wireSettings();
+  }
+  function wireSettings() {
+    var color = document.getElementById("f-accent");
+    var hex = document.getElementById("f-accent-hex");
+    function preview(v) { if (document.documentElement && document.documentElement.style) document.documentElement.style.setProperty("--accent", v); }
+    if (color) color.addEventListener("input", function () { if (hex) hex.value = color.value; preview(color.value); });
+    if (hex) hex.addEventListener("input", function () { if (color) color.value = hex.value; preview(hex.value); });
+    var btn = document.getElementById("save-brand");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var meta = { business: valOf("f-business"), tagline: valOf("f-tagline"), accent: valOf("f-accent-hex") || valOf("f-accent") };
+      var status = document.getElementById("save-status");
+      status.textContent = "Saving…";
+      fetch("__save-meta", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(meta) })
+        .then(function (r) { if (!r.ok) throw new Error("no server"); status.textContent = "Saved — reloading…"; setTimeout(function () { location.href = "index.html"; }, 500); })
+        .catch(function () {
+          preview(meta.accent);
+          var b = document.getElementById("brand"); if (b) b.textContent = meta.business || "CRM";
+          status.textContent = "Previewed (open via the local server to save to disk).";
+          document.getElementById("save-fallback").innerHTML =
+            '<div class="callout" style="margin-top:14px">Not served locally, so I can\'t write to disk. Paste this into <code>data.js</code> (or ask your agent):<br><br><code>meta: ' + esc(JSON.stringify(meta)) + ',</code></div>';
+        });
+    });
+  }
+  function valOf(id) { var e = document.getElementById(id); return e ? e.value : ""; }
+
+  window.CRMRender = { home: renderHome, view: renderView, settings: renderSettings };
 })();

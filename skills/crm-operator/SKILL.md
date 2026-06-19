@@ -17,6 +17,7 @@ render.js      ← shared engine: draws any page from data.js (never entity-spec
 styles.css     ← shared look
 index.html     ← home + dashboards (pipeline, follow-ups, recent activity)
 view.html      ← renders any one entity: view.html?type=deal&id=<slug>
+settings.html  ← in-app branding editor (business name, tagline, accent) — writes meta to data.js via the server
 MISSION.md     ← who the user is, what they sell, goals — grounds prioritization
 NOTES.md       ← your working notes & the user's preferences
 log.md         ← append-only activity log
@@ -28,7 +29,7 @@ log.md         ← append-only activity log
 
 ## Data shape
 
-`data.js` is one assignment: `window.CRM = { meta: {...}, contacts: {}, companies: {}, deals: {}, interactions: {}, tasks: {} }`. **`meta`** carries the branding — `{ business: "Acme", tagline: "Sales CRM", accent: "#4f46e5" }`. The whole UI re-themes from `meta.accent` (one color drives the palette), and `meta.business` names the app in the header. Set these during bootstrap. Each bucket maps `id → entity`. The **id is the slug** of the entity's title: lowercase, non-alphanumeric → `-` (e.g. `"Sarah Chen"` → `sarah-chen`, `"Meridian Health - Platform Migration"` → `meridian-health-platform-migration`). Relationships are stored as **ids** (`deal.company = "meridian-health"`). Free-text body lives in a `sections` object (`{ "Background": "markdown…" }`); section prose may use `[[Wikilinks]]` and they resolve automatically. Auto/computed sections (Interaction History, Linked Deals, Key Contacts, Active Deals) are **not stored** — the engine computes them. Per-entity fields: see [formats/](formats/).
+`data.js` is one assignment: `window.CRM = { meta: {...}, contacts: {}, companies: {}, deals: {}, interactions: {}, tasks: {} }`. **`meta`** carries the branding — `{ business: "Acme", tagline: "Sales CRM", accent: "#4f46e5" }`. The whole UI re-themes from `meta.accent` (one color drives the palette), and `meta.business` names the app in the header. Set these during bootstrap, or let the user edit them from the in-app **Settings** page (`settings.html`), which writes `meta` back via the local server. The `meta` line is marked with `/*@meta*/` so the server rewrites only that line. Each bucket maps `id → entity`. The **id is the slug** of the entity's title: lowercase, non-alphanumeric → `-` (e.g. `"Sarah Chen"` → `sarah-chen`, `"Meridian Health - Platform Migration"` → `meridian-health-platform-migration`). Relationships are stored as **ids** (`deal.company = "meridian-health"`). Free-text body lives in a `sections` object (`{ "Background": "markdown…" }`); section prose may use `[[Wikilinks]]` and they resolve automatically. Auto/computed sections (Interaction History, Linked Deals, Key Contacts, Active Deals) are **not stored** — the engine computes them. Per-entity fields: see [formats/](formats/).
 
 ## Workflows
 

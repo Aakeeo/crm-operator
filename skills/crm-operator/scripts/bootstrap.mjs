@@ -15,7 +15,7 @@ for (const f of readdirSync(ENGINE)) copyFileSync(join(ENGINE, f), join(target, 
 
 const seed = {
   "data.js": "window.CRM = {\n" +
-    "  meta: { business: \"\", tagline: \"\", accent: \"\" },\n" +
+    "  meta: {\"business\":\"\",\"tagline\":\"\",\"accent\":\"\"}, /*@meta*/\n" +
     "  contacts: {},\n  companies: {},\n  deals: {},\n  interactions: {},\n  tasks: {}\n};\n",
   "MISSION.md": "# Mission\n\n_Who are you, what do you sell, and what are your current goals? The CRM uses this to prioritize._\n",
   "NOTES.md": "# Notes\n\n_Working notes and preferences for how this CRM should be maintained._\n",

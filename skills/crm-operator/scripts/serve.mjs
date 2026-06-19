@@ -5,10 +5,27 @@
  * Run it in the background when opening a CRM so it's always reachable. */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, join, extname, normalize } from "node:path";
 
 const root = resolve(process.argv[2] || ".");
 const port = Number(process.argv[3] || 8787);
+
+// Persist branding edits from the in-app Settings page into data.js. Only the
+// single /*@meta*/ line is rewritten — the rest of the file is untouched.
+function saveMeta(body, res) {
+  try {
+    const i = JSON.parse(body || "{}");
+    const meta = { business: String(i.business || ""), tagline: String(i.tagline || ""), accent: String(i.accent || "") };
+    const path = join(root, "data.js");
+    let src = readFileSync(path, "utf8");
+    const line = "  meta: " + JSON.stringify(meta) + ", /*@meta*/";
+    if (/\/\*@meta\*\//.test(src)) src = src.replace(/^.*\/\*@meta\*\/.*$/m, line);
+    else src = src.replace(/window\.CRM\s*=\s*\{/, (m) => m + "\n" + line);
+    writeFileSync(path, src);
+    res.writeHead(200, { "content-type": "application/json" }); res.end('{"ok":true}');
+  } catch (e) { res.writeHead(500); res.end(String(e)); }
+}
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json", ".png": "image/png",
@@ -16,6 +33,9 @@ const TYPES = {
 };
 
 const server = createServer(async (req, res) => {
+  if (req.method === "POST" && (req.url || "").split("?")[0] === "/__save-meta") {
+    let body = ""; req.on("data", (c) => (body += c)); req.on("end", () => saveMeta(body, res)); return;
+  }
   try {
     let p = decodeURIComponent((req.url || "/").split("?")[0]);
     if (p === "/") p = "/index.html";

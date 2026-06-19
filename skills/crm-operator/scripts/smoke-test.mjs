@@ -12,7 +12,7 @@ let captured = "";
 function makeEnv(search) {
   globalThis.window = {};
   globalThis.document = {
-    _el: { set innerHTML(v) { captured = v; }, get innerHTML() { return captured; }, set textContent(v) {}, get textContent() { return ""; } },
+    _el: { set innerHTML(v) { captured = v; }, get innerHTML() { return captured; }, set textContent(v) {}, get textContent() { return ""; }, addEventListener() {}, value: "", style: { setProperty() {} } },
     documentElement: { style: { setProperty() {} } },
     getElementById() { return this._el; },
     set title(v) {}, get title() { return ""; }
@@ -65,6 +65,12 @@ for (const [plural, sing] of Object.entries({ contacts: "contact", companies: "c
   }
 }
 ok(rendered === 45, `all ${rendered} entity pages rendered without throwing`);
+
+// Settings page renders
+w = load("");
+captured = "";
+w.CRMRender.settings();
+ok(captured.includes("Branding") && captured.includes('id="f-business"'), "settings page renders the branding form");
 
 // Task related links must resolve (regression for the [[..]] bug)
 w = load("?type=task&id=confirm-thursday-sandbox-walkthrough");
