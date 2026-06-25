@@ -41,37 +41,68 @@ function autoUpdateEngine(vault) {
 }
 
 // ---- persist Settings-page branding into data.js (only the /*@meta*/ line) ----
+// Rewrites ONLY the branding keys, preserving any other meta keys (profile, etc.)
+// the Settings form never sends. Invariant: meta is ONE line ending `, /*@meta*/`.
+export function applyMeta(src, branding) {
+  let meta = {};
+  const cur = src.match(/["']?meta["']?\s*:\s*(.+),\s*\/\*@meta\*\//);
+  if (cur) { try { meta = JSON.parse(cur[1]); } catch { /* unparseable → start clean */ } }
+  meta.business = String(branding.business || "");
+  meta.tagline = String(branding.tagline || "");
+  meta.accent = String(branding.accent || "");
+  const line = "  meta: " + JSON.stringify(meta) + ", /*@meta*/";
+  if (/\/\*@meta\*\//.test(src)) return src.replace(/^.*\/\*@meta\*\/.*$/m, line);
+  return src.replace(/window\.CRM\s*=\s*\{/, (m) => m + "\n" + line);
+}
 function saveMeta(body, res) {
   try {
     const i = JSON.parse(body || "{}");
-    const meta = { business: String(i.business || ""), tagline: String(i.tagline || ""), accent: String(i.accent || "") };
     const path = join(root, "data.js");
-    let src = readFileSync(path, "utf8");
-    const line = "  meta: " + JSON.stringify(meta) + ", /*@meta*/";
-    if (/\/\*@meta\*\//.test(src)) src = src.replace(/^.*\/\*@meta\*\/.*$/m, line);
-    else src = src.replace(/window\.CRM\s*=\s*\{/, (m) => m + "\n" + line);
-    writeFileSync(path, src);
+    writeFileSync(path, applyMeta(readFileSync(path, "utf8"), i));
     res.writeHead(200, { "content-type": "application/json" }); res.end('{"ok":true}');
   } catch (e) { res.writeHead(500); res.end(String(e)); }
 }
 
 // ---- create a new entity from the New form (insert into data.js) ----
 const BUCKET = { contact: "contacts", company: "companies", deal: "deals", interaction: "interactions", task: "tasks" };
+const escapeReg = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function createEntity(body, res) {
   try {
     const p = JSON.parse(body || "{}");
-    const bucket = BUCKET[p.type];
-    if (!bucket || !p.id || !p.entity) throw new Error("bad payload");
+    if (!p.id || !p.entity) throw new Error("bad payload");
     const path = join(root, "data.js");
     let src = readFileSync(path, "utf8");
     if (src.indexOf('"' + p.id + '":') !== -1) { res.writeHead(409); return res.end("An entry with id \"" + p.id + "\" already exists."); }
-    const re = new RegExp('(["\']?' + bucket + '["\']?\\s*:\\s*\\{)');
-    if (!re.test(src)) throw new Error("bucket " + bucket + " not found in data.js");
     const entry = "\n    " + JSON.stringify(p.id) + ": " + JSON.stringify(p.entity) + ",";
-    src = src.replace(re, (m) => m + entry);
+    if (p.objType) {
+      src = insertObject(src, p.objType, entry);
+    } else {
+      const bucket = BUCKET[p.type];
+      if (!bucket) throw new Error("bad payload");
+      const re = new RegExp('(["\']?' + bucket + '["\']?\\s*:\\s*\\{)');
+      if (!re.test(src)) throw new Error("bucket " + bucket + " not found in data.js");
+      src = src.replace(re, (m) => m + entry);
+    }
     writeFileSync(path, src);
     res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ ok: true, id: p.id }));
   } catch (e) { res.writeHead(400); res.end(String((e && e.message) || e)); }
+}
+// Insert an object record into CRM.objects[<ot>], creating the objects bucket and/or
+// the type sub-bucket as needed. Keeps data.js a plain editable object literal.
+function insertObject(src, ot, entry) {
+  const objM = src.match(/["']?objects["']?\s*:\s*\{/);
+  if (objM) {
+    const start = objM.index + objM[0].length;
+    const after = src.slice(start);
+    const km = after.match(new RegExp('["\']?' + escapeReg(ot) + '["\']?\\s*:\\s*\\{'));
+    if (km) { const at = start + km.index + km[0].length; return src.slice(0, at) + entry + src.slice(at); }
+    const sub = "\n    " + JSON.stringify(ot) + ": {" + entry + "\n    },";
+    return src.slice(0, start) + sub + src.slice(start);
+  }
+  const newBucket = "\n  objects: {\n    " + JSON.stringify(ot) + ": {" + entry + "\n    }\n  },";
+  const tm = src.match(/["']?tasks["']?\s*:\s*\{[\s\S]*?\n\s*\}/);
+  if (tm) { const at = tm.index + tm[0].length; return src.slice(0, at) + "," + newBucket + src.slice(at); }
+  return src.replace(/\}\s*;\s*$/, newBucket + "\n};");
 }
 
 // ---- check the repo for a newer version (best-effort, cached) ----
@@ -138,7 +169,8 @@ function tryListen(port) {
   });
 }
 
-(async () => {
+const isEntry = process.argv[1] === fileURLToPath(import.meta.url);
+if (isEntry) (async () => {
   for (let p = startPort; p < startPort + 25; p++) {
     const ours = await probe(p);
     if (ours) { if (resolve(ours.root) === root) { console.log(`CRM already live at http://127.0.0.1:${p}/`); return; } continue; }

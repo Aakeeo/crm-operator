@@ -1,0 +1,5 @@
+{
+  "contact": { "name": ["First Name", "Last Name"], "email": "Email", "phone": "Phone Number", "company": "Associated Company", "role": "Job Title", "lead_source": "Lead Source" },
+  "company": { "name": "Company name", "fields.domain": "Company Domain Name", "fields.industry": "Industry" },
+  "deal": { "name": "Deal Name", "value": "Amount", "stage": "Deal Stage", "expected_close": "Close Date", "company": "Associated Company" }
+}

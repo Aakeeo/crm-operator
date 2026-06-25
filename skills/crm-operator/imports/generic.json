@@ -1,0 +1,5 @@
+{
+  "contact": { "name": "Name", "email": "Email", "phone": "Phone", "company": "Company", "role": "Title" },
+  "company": { "name": "Name", "fields.domain": "Domain", "fields.industry": "Industry" },
+  "deal": { "name": "Name", "value": "Value", "stage": "Stage", "company": "Company" }
+}

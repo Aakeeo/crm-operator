@@ -4,6 +4,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { applyMeta } from "./serve.mjs";
+import { csvToObjects, buildEntity } from "./import.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ex = join(here, "..", "example");
@@ -23,6 +25,12 @@ function makeEnv(search) {
 function load(search) {
   makeEnv(search);
   eval(readFileSync(join(ex, "data.js"), "utf8"));
+  eval(readFileSync(join(ex, "render.js"), "utf8"));
+  return window;
+}
+function loadFixture(crm, search) {        // render an arbitrary CRM (for profile/object tests)
+  makeEnv(search);
+  window.CRM = crm;
   eval(readFileSync(join(ex, "render.js"), "utf8"));
   return window;
 }
@@ -102,6 +110,76 @@ w = load("?type=task&id=confirm-thursday-sandbox-walkthrough");
 captured = "";
 w.CRMRender.view();
 ok(captured.includes("view.html?type=deal"), "task related_to links resolve to pages");
+
+// ---- business profile (per-business labels, stages, custom fields) --------
+var FX = {
+  meta: { business: "Cascade Realty", accent: "#0d9488", profile: {
+    labels: { deal: { one: "Listing", many: "Listings" }, contact: { one: "Client", many: "Clients" } },
+    stages: ["new", "showing", "offer", "escrow"],
+    stageLabels: { "closed-won": "Sold", "closed-lost": "Withdrawn" },
+    fields: { deal: [{ key: "address", label: "Address" }, { key: "price", label: "Price", num: true }] },
+    objects: [{ type: "property", one: "Property", many: "Properties", fields: [{ key: "address", label: "Address" }, { key: "beds", label: "Beds", num: true }], links: ["contact", "deal"] }]
+  } },
+  contacts: { "jane-doe": { type: "contact", id: "jane-doe", name: "Jane Doe", company: "acme", sections: {} } },
+  companies: { "acme": { type: "company", id: "acme", name: "Acme", sections: {} } },
+  deals: { "acme-main": { type: "deal", id: "acme-main", name: "123 Main St", company: "acme", stage: "offer", value: 850000, fields: { address: "123 Main St", price: 850000 }, sections: {} } },
+  interactions: {}, tasks: {},
+  objects: { property: { "123-main-st": { type: "property", id: "123-main-st", name: "123 Main St", fields: { address: "123 Main St", beds: 3 }, links: { contact: ["jane-doe"], deal: ["acme-main"] }, sections: {} } } }
+};
+let fw = loadFixture(FX, ""); captured = ""; fw.CRMRender.home();
+ok(captured.includes("Open Listings"), "home KPI uses custom label 'Listings'");
+ok(captured.includes("Clients"), "home uses custom label 'Clients'");
+fw = loadFixture(FX, "?type=deal&id=acme-main"); captured = ""; fw.CRMRender.view();
+ok(captured.includes("Listing") && !captured.includes(">Deal<"), "deal kicker uses custom label");
+ok(captured.includes("Address") && captured.includes("123 Main St"), "deal shows custom field value");
+fw = loadFixture(FX, "?type=deals"); captured = ""; fw.CRMRender.list();
+ok(captured.includes("All Listings"), "deal list title uses custom label");
+fw = loadFixture(FX, "?type=deal"); captured = ""; fw.CRMRender.create();
+ok(captured.includes("Sold") && captured.includes("showing"), "new deal form offers custom stages");
+ok(captured.includes("Address") && captured.includes("Price"), "new deal form offers custom fields");
+
+// ---- custom objects -------------------------------------------------------
+fw = loadFixture(FX, "?type=obj:property"); captured = ""; fw.CRMRender.list();
+ok(captured.includes("All Properties") && captured.includes("123 Main St"), "object list renders");
+ok(captured.includes("Beds"), "object list shows object field columns");
+fw = loadFixture(FX, "?type=obj:property&id=123-main-st"); captured = ""; fw.CRMRender.view();
+ok(captured.includes("123 Main St") && captured.includes("Address"), "object page shows fields");
+ok(captured.includes("view.html?type=contact") || captured.includes("type=contact"), "object page links to a contact");
+fw = loadFixture(FX, "?type=contact&id=jane-doe"); captured = ""; fw.CRMRender.view();
+ok(captured.includes("Properties") && captured.includes("123 Main St"), "core page shows object backlinks");
+fw = loadFixture(FX, "?type=obj:property"); captured = ""; fw.CRMRender.create();
+ok(captured.includes("Property") && captured.includes("Address") && captured.includes("Beds"), "object create form renders");
+
+// ---- branding save must preserve an existing profile (data-loss regression) ----
+{
+  const before = 'window.CRM = {\n  meta: {"business":"Old","accent":"#111","profile":{"industry":"realty","labels":{"deal":{"one":"Listing"}}}}, /*@meta*/\n  contacts: {}\n};';
+  const after = applyMeta(before, { business: "New Co", tagline: "T", accent: "#000" });
+  ok(after.includes('"realty"') && after.includes('"Listing"'), "branding save preserves meta.profile");
+  ok(after.includes('"business":"New Co"') && after.includes('"accent":"#000"'), "branding save updates branding fields");
+  ok((after.match(/\/\*@meta\*\//g) || []).length === 1, "branding save keeps a single @meta marker");
+}
+
+// ---- CSV import (parser handles quotes/commas/newlines; mapping builds entities) ----
+{
+  const csv = 'First Name,Last Name,Email,Amount,Notes\n"Jane","Doe",jane@x.com,"$1,200","a, b\nc"\nJohn,Roe,john@x.com,950,plain';
+  const { headers, records } = csvToObjects(csv);
+  ok(headers.length === 5 && records.length === 2, "CSV parses header + 2 rows");
+  ok(records[0]["Notes"] === "a, b\nc", "CSV keeps quoted comma + embedded newline");
+
+  const hubspot = { name: ["First Name", "Last Name"], email: "Email" };
+  const e = buildEntity("contact", records[0], hubspot, "2026-06-25");
+  ok(e.id === "jane-doe" && e.name === "Jane Doe", "buildEntity joins names and slugs id");
+  ok(e.created === "2026-06-25", "buildEntity stamps created/updated");
+
+  const deal = buildEntity("deal", records[0], { name: "Email", value: "Amount" }, "2026-06-25");
+  ok(deal.value === 1200, "buildEntity coerces $1,200 → number 1200");
+  const noName = buildEntity("contact", { Email: "x@y.com" }, { email: "Email" }, "2026-06-25");
+  ok(noName === null, "buildEntity skips a row with no name");
+  const dealStage = buildEntity("deal", { Email: "z@z.com" }, { name: "Email" }, "2026-06-25");
+  ok(dealStage.stage === "lead", "deal without a stage defaults to lead");
+  const c = buildEntity("contact", { Co: "Meridian Health" }, { name: "Co", company: "Co" }, "2026-06-25");
+  ok(c.company === "meridian-health", "relationship field is slugged to an id");
+}
 
 console.log(fail ? `\n  ${fail} FAILED` : "\n  all passed");
 process.exit(fail ? 1 : 0);

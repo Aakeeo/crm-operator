@@ -10,7 +10,10 @@
   var PLURAL = { contact: "contacts", company: "companies", deal: "deals", interaction: "interactions", task: "tasks" };
 
   // ---- helpers -------------------------------------------------------------
-  function bucket(type) { return CRM[PLURAL[type] || type] || {}; }
+  function bucket(type) {
+    if (type && type.indexOf("obj:") === 0) return (CRM.objects && CRM.objects[type.slice(4)]) || {};
+    return CRM[PLURAL[type] || type] || {};
+  }
   function get(type, id) { return bucket(type)[id]; }
   function all(type) { return Object.values(bucket(type)); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
@@ -18,6 +21,48 @@
   function today() { var d = new Date(); return d.toISOString().slice(0, 10); }
 
   function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
+
+  // ---- business profile (per-business labels, stages, custom fields) -------
+  // meta.profile lets one CRM read as a law firm, another as a brokerage, etc.
+  // Everything below falls back to the generic defaults when no profile is set.
+  var PROFILE = META.profile || {};
+  var DEFAULT_LABELS = {
+    contact: { one: "Contact", many: "Contacts" }, company: { one: "Company", many: "Companies" },
+    deal: { one: "Deal", many: "Deals" }, interaction: { one: "Interaction", many: "Interactions" },
+    task: { one: "Task", many: "Tasks" }
+  };
+  function label(type, many) {
+    if (type && type.indexOf("obj:") === 0) {
+      var def = objectDef(type.slice(4));
+      if (def) return many ? (def.many || def.type) : (def.one || def.type);
+      return type.slice(4);
+    }
+    var d = DEFAULT_LABELS[type] || { one: type, many: type };
+    var l = (PROFILE.labels && PROFILE.labels[type]) || {};
+    return many ? (l.many || d.many) : (l.one || d.one);
+  }
+  var DEFAULT_OPEN_STAGES = ["lead", "qualified", "proposal", "negotiation"];
+  function openStages() { return (PROFILE.stages && PROFILE.stages.length) ? PROFILE.stages.slice() : DEFAULT_OPEN_STAGES.slice(); }
+  function allStages() { return openStages().concat(["closed-won", "closed-lost"]); }
+  function stageLabel(s) { return (PROFILE.stageLabels && PROFILE.stageLabels[s]) || s; }
+  function isClosed(s) { return s === "closed-won" || s === "closed-lost"; }
+  function fieldDefs(type) { return (PROFILE.fields && PROFILE.fields[type]) || []; }
+  function fmtVal(f, v) { return f && f.num ? Number(v).toLocaleString("en-US") : v; }
+  // Render a definition list for any field set that carries a value (stored on e.fields).
+  function fieldsDl(defs, e) {
+    if (!defs || !defs.length) return "";
+    var rows = defs.map(function (f) {
+      var v = e.fields && e.fields[f.key];
+      if (v == null || v === "") return "";
+      return '<div class="dt">' + esc(f.label || f.key) + '</div><div class="dd">' + esc(fmtVal(f, v)) + "</div>";
+    }).filter(Boolean).join("");
+    return rows ? '<div class="fielddl">' + rows + "</div>" : "";
+  }
+  function extrasHtml(type, e) { return fieldsDl(fieldDefs(type), e); }
+
+  // ---- custom objects (per-business entity types beyond the core five) -----
+  function objectDefs() { return PROFILE.objects || []; }
+  function objectDef(ot) { var a = objectDefs(); for (var i = 0; i < a.length; i++) if (a[i].type === ot) return a[i]; return null; }
 
   // Resolve [[Wikilinks]] in prose/relations to pages. Wikilinks may reference a
   // page *title* (-> matches an id via slug) or a frontmatter name (-> NAMEIDX).
@@ -41,6 +86,19 @@
 
   function badge(text, kind) { return '<span class="badge' + (kind ? " " + kind : "") + '">' + esc(text) + "</span>"; }
   var STAGE_KIND = { lead: "", qualified: "accent", proposal: "accent", negotiation: "warn", "closed-won": "good", "closed-lost": "bad" };
+  // Color a stage badge. Honors explicit profile.stageColors, then known defaults,
+  // then infers a gradient by position for custom pipelines (later = warmer).
+  function stageKind(s) {
+    if (s === "closed-won") return "good";
+    if (s === "closed-lost") return "bad";
+    if (PROFILE.stageColors && PROFILE.stageColors[s] != null) return PROFILE.stageColors[s];
+    if (!(PROFILE.stages && PROFILE.stages.length) && STAGE_KIND[s] != null) return STAGE_KIND[s];
+    var arr = openStages(), i = arr.indexOf(s), n = arr.length;
+    if (i === -1) return STAGE_KIND[s] || "";
+    if (i >= n - 1) return "warn";
+    if (i >= Math.ceil(n / 2)) return "accent";
+    return "";
+  }
   var STATUS_KIND = { active: "good", customer: "good", prospect: "accent", partner: "accent", inactive: "", churned: "bad", "closed-lost": "bad" };
   var PRIO_KIND = { high: "bad", medium: "warn", low: "" };
 
@@ -98,6 +156,30 @@
     var b = document.getElementById("brand");
     if (b) b.textContent = META.business || "CRM";
     document.title = (META.business ? META.business + " · " : "") + "CRM";
+    applyNavLabels();
+  }
+  // Relabel the static nav from the profile, and append one item per custom object type.
+  function applyNavLabels() {
+    if (typeof document === "undefined" || !document.querySelectorAll) return;
+    var map = { deals: ["deal", true], contacts: ["contact", true], companies: ["company", true] };
+    var links = document.querySelectorAll(".topnav a[data-nav]");
+    for (var i = 0; i < links.length; i++) {
+      var k = links[i].getAttribute && links[i].getAttribute("data-nav");
+      if (map[k]) links[i].textContent = label(map[k][0], map[k][1]);
+    }
+    var objs = PROFILE.objects || [];
+    var nav = document.querySelector ? document.querySelector(".topnav") : null;
+    if (nav && objs.length && typeof document.createElement === "function" && !(nav.getAttribute && nav.getAttribute("data-objs"))) {
+      var settings = nav.querySelector ? nav.querySelector('a[data-nav="settings"]') : null;
+      objs.forEach(function (o) {
+        var a = document.createElement("a");
+        a.setAttribute("data-nav", "obj:" + o.type);
+        a.setAttribute("href", "list.html?type=obj:" + encodeURIComponent(o.type));
+        a.textContent = o.many || o.type;
+        if (settings) nav.insertBefore(a, settings); else nav.appendChild(a);
+      });
+      nav.setAttribute("data-objs", "1");
+    }
   }
 
   // ---- avatars (deterministic initials chip) -------------------------------
@@ -136,7 +218,7 @@
     var ints = all("interaction").filter(function (i) { return (i.participants || []).indexOf(e.id) !== -1; })
       .sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
     var head =
-      "<p class=\"kicker\">Contact</p><h1 class=\"has-av\">" + avatar(e.name, { size: 40 }) + "<span>" + esc(e.name) + "</span></h1>" +
+      '<p class="kicker">' + esc(label("contact")) + '</p><h1 class="has-av">' + avatar(e.name, { size: 40 }) + "<span>" + esc(e.name) + "</span></h1>" +
       '<div class="meta">' +
       (e.role ? "<span><b>" + esc(e.role) + "</b></span>" : "") +
       (e.company ? "<span>" + link("company", e.company) + "</span>" : "") +
@@ -145,17 +227,17 @@
       (e.phone ? "<span>" + esc(e.phone) + "</span>" : "") +
       (e.last_contacted ? "<span>last contacted <b>" + esc(e.last_contacted) + "</b></span>" : "") +
       "</div>";
-    mount(head + tagline(e) +
+    mount(head + tagline(e) + extrasHtml("contact", e) +
       sectionsHtml(e) +
-      relatedBlock("Interaction History", ints.map(function (i) { return link("interaction", i.id, i.date + " · " + i.name); })) +
-      relatedBlock("Linked Deals", deals.map(function (d) { return link("deal", d.id); })));
+      relatedBlock(label("interaction", true) + " History", ints.map(function (i) { return link("interaction", i.id, i.date + " · " + i.name); })) +
+      relatedBlock("Linked " + label("deal", true), deals.map(function (d) { return link("deal", d.id); })));
   }
 
   function renderCompany(e) {
     var contacts = all("contact").filter(function (c) { return c.company === e.id; });
     var deals = all("deal").filter(function (d) { return d.company === e.id && d.stage !== "closed-lost"; });
     var head =
-      "<p class=\"kicker\">Company</p><h1 class=\"has-av\">" + avatar(e.name, { size: 40, square: true }) + "<span>" + esc(e.name) + "</span></h1>" +
+      '<p class="kicker">' + esc(label("company")) + '</p><h1 class="has-av">' + avatar(e.name, { size: 40, square: true }) + "<span>" + esc(e.name) + "</span></h1>" +
       '<div class="meta">' +
       (e.industry ? "<span><b>" + esc(e.industry) + "</b></span>" : "") +
       (e.size ? "<span>" + esc(e.size) + "</span>" : "") +
@@ -168,32 +250,32 @@
       return [avatarLink("contact", c.id), esc(c.role || ""), badge(c.status || "—", STATUS_KIND[c.status]), { num: c.last_contacted || "—" }];
     })) : '<p class="empty">No contacts yet.</p>';
     var dtable = deals.length ? table(["Deal", "Stage", "Value", "Prob"], deals.map(function (d) {
-      return [link("deal", d.id), badge(d.stage, STAGE_KIND[d.stage]), { num: money(d.value) }, { num: (d.probability || 0) + "%" }];
+      return [link("deal", d.id), badge(stageLabel(d.stage), stageKind(d.stage)), { num: money(d.value) }, { num: (d.probability || 0) + "%" }];
     })) : '<p class="empty">No active deals.</p>';
-    mount(head + tagline(e) + sectionsHtml(e) + "<h2>Key Contacts</h2>" + ctable + "<h2>Active Deals</h2>" + dtable);
+    mount(head + tagline(e) + extrasHtml("company", e) + sectionsHtml(e) + "<h2>Key " + esc(label("contact", true)) + "</h2>" + ctable + "<h2>Active " + esc(label("deal", true)) + "</h2>" + dtable);
   }
 
   function renderDeal(e) {
     var ints = all("interaction").filter(function (i) { return i.deal === e.id; })
       .sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
     var head =
-      "<p class=\"kicker\">Deal</p><h1>" + esc(e.name) + "</h1>" +
+      '<p class="kicker">' + esc(label("deal")) + '</p><h1>' + esc(e.name) + "</h1>" +
       '<div class="meta">' +
       "<span><b>" + money(e.value) + "</b> " + esc(e.currency || "") + "</span>" +
-      "<span>" + badge(e.stage, STAGE_KIND[e.stage]) + "</span>" +
+      "<span>" + badge(stageLabel(e.stage), stageKind(e.stage)) + "</span>" +
       "<span>" + (e.probability || 0) + "% prob</span>" +
       (e.company ? "<span>" + link("company", e.company) + "</span>" : "") +
       (e.primary_contact ? "<span>" + link("contact", e.primary_contact) + "</span>" : "") +
       (e.expected_close ? "<span>close <b>" + esc(e.expected_close) + "</b></span>" : "") +
       "</div>";
-    mount(head + tagline(e) + sectionsHtml(e) +
-      relatedBlock("Interactions", ints.map(function (i) { return link("interaction", i.id, i.date + " · " + i.name); })));
+    mount(head + tagline(e) + extrasHtml("deal", e) + sectionsHtml(e) +
+      relatedBlock(label("interaction", true), ints.map(function (i) { return link("interaction", i.id, i.date + " · " + i.name); })));
   }
 
   function renderInteraction(e) {
     var parts = (e.participants || []).map(function (p) { return link("contact", p); });
     var head =
-      "<p class=\"kicker\">Interaction · " + esc(e.interaction_type || "") + "</p><h1>" + esc(e.name) + "</h1>" +
+      '<p class="kicker">' + esc(label("interaction")) + " · " + esc(e.interaction_type || "") + '</p><h1>' + esc(e.name) + "</h1>" +
       '<div class="meta">' +
       (e.date ? "<span><b>" + esc(e.date) + "</b></span>" : "") +
       (e.company ? "<span>" + link("company", e.company) + "</span>" : "") +
@@ -203,7 +285,7 @@
       (e.source && e.source.channel && e.source.channel !== "manual" ? "<span>" + badge("via " + e.source.channel) + "</span>" : "") +
       "</div>" +
       (e.summary ? '<p class="subtle">' + esc(e.summary) + "</p>" : "");
-    mount(head +
+    mount(head + extrasHtml("interaction", e) +
       relatedBlock("Participants", parts) +
       sectionsHtml(e));
   }
@@ -214,14 +296,14 @@
     });
     var overdue = e.due_date && e.status !== "done" && e.due_date < today();
     var head =
-      "<p class=\"kicker\">Task</p><h1>" + esc(e.title || e.name) + "</h1>" +
+      '<p class="kicker">' + esc(label("task")) + '</p><h1>' + esc(e.title || e.name) + "</h1>" +
       '<div class="meta">' +
       "<span>" + badge(e.status || "todo", e.status === "done" ? "good" : "") + "</span>" +
       "<span>" + badge((e.priority || "medium") + " priority", PRIO_KIND[e.priority]) + "</span>" +
       (e.due_date ? "<span>due <b>" + esc(e.due_date) + "</b>" + (overdue ? " " + badge("overdue", "bad") : "") + "</span>" : "") +
       (e.assigned_to ? "<span>" + esc(e.assigned_to) + "</span>" : "") +
       "</div>";
-    mount(head + sectionsHtml(e) + relatedBlock("Related", rel));
+    mount(head + extrasHtml("task", e) + sectionsHtml(e) + relatedBlock("Related", rel));
   }
 
   // ---- shared table builder ------------------------------------------------
@@ -253,16 +335,16 @@
     var kpis = '<div class="grid kpis">' + [
       kpi(money(pipeline), "Open pipeline"),
       kpi(money(Math.round(weighted)), "Weighted"),
-      kpi(open.length, "Open deals", "plain"),
-      kpi(all("contact").length, "Contacts", "plain"),
-      kpi(overdue.length, "Overdue tasks", overdue.length ? "bad" : "plain")
+      kpi(open.length, "Open " + label("deal", true), "plain"),
+      kpi(all("contact").length, label("contact", true), "plain"),
+      kpi(overdue.length, "Overdue " + label("task", true), overdue.length ? "bad" : "plain")
     ].join("") + "</div>";
 
-    var stageOrder = ["lead", "qualified", "proposal", "negotiation", "closed-won"];
+    var stageOrder = allStages();
     var pipeRows = open.slice().sort(function (a, b) {
       return stageOrder.indexOf(b.stage) - stageOrder.indexOf(a.stage) || (b.value || 0) - (a.value || 0);
     }).map(function (d) {
-      return [link("deal", d.id), d.company ? avatarLink("company", d.company, true) : "", badge(d.stage, STAGE_KIND[d.stage]),
+      return [link("deal", d.id), d.company ? avatarLink("company", d.company, true) : "", badge(stageLabel(d.stage), stageKind(d.stage)),
         { num: money(d.value) }, { num: (d.probability || 0) + "%" }];
     });
 
@@ -277,7 +359,7 @@
       '<div id="update-banner"></div>' +
       '<p class="kicker">' + esc(META.business || "CRM") + "</p><h1>Home</h1>" +
       (META.tagline ? '<p class="subtle">' + esc(META.tagline) + "</p>" : "") + kpis +
-      "<h2>Pipeline</h2>" + (pipeRows.length ? table(["Deal", "Company", "Stage", "Value", "Prob"], pipeRows,
+      "<h2>Pipeline</h2>" + (pipeRows.length ? table([label("deal"), label("company"), "Stage", "Value", "Prob"], pipeRows,
         ["<strong>Total</strong>", "", "", { num: "<strong>" + money(pipeline) + "</strong>" }, ""]) : '<p class="empty">No open deals.</p>') +
       "<h2>Follow-ups</h2>" + (taskRows.length ? tableRows(["Task", "Priority", "Due"], taskRows) : '<p class="empty">Nothing open.</p>') +
       "<h2>Recent activity</h2>" + (ints.length ? table(["Date", "Interaction", "Company"], ints.map(function (i) {
@@ -304,7 +386,7 @@
   }
   function directories() {
     var c = all("contact").sort(byName).map(function (x) { return chip("contact", x.id); });
-    return relatedBlock("Contacts", c);
+    return relatedBlock(label("contact", true), c);
   }
   function byName(a, b) { return (a.name || "").localeCompare(b.name || ""); }
 
@@ -312,27 +394,27 @@
   var LIST_CFG = {
     deals: {
       kicker: "Deals", title: "All Deals", rows: function () { return all("deal"); },
-      head: ["Deal", "Company", "Stage", "Value", "Prob"],
-      cell: function (d) { return [link("deal", d.id), d.company ? avatarLink("company", d.company, true) : "", badge(d.stage, STAGE_KIND[d.stage]), { num: money(d.value) }, { num: (d.probability || 0) + "%" }]; },
+      head: [label("deal"), label("company"), "Stage", "Value", "Prob"],
+      cell: function (d) { return [link("deal", d.id), d.company ? avatarLink("company", d.company, true) : "", badge(stageLabel(d.stage), stageKind(d.stage)), { num: money(d.value) }, { num: (d.probability || 0) + "%" }]; },
     },
     contacts: {
       kicker: "Contacts", title: "All Contacts", rows: function () { return all("contact").sort(byName); },
-      head: ["Name", "Role", "Company", "Status", "Last contact"],
+      head: ["Name", "Role", label("company"), "Status", "Last contact"],
       cell: function (c) { return [avatarLink("contact", c.id), esc(c.role || ""), c.company ? link("company", c.company) : "", badge(c.status || "—", STATUS_KIND[c.status]), { num: c.last_contacted || "—" }]; },
     },
     companies: {
       kicker: "Companies", title: "All Companies", rows: function () { return all("company").sort(byName); },
-      head: ["Company", "Industry", "Location", "Status", "ARR potential"],
+      head: [label("company"), "Industry", "Location", "Status", "ARR potential"],
       cell: function (c) { return [avatarLink("company", c.id, true), esc(c.industry || ""), esc(c.location || ""), badge(c.status || "—", STATUS_KIND[c.status]), { num: c.arr_potential ? money(c.arr_potential) : "—" }]; },
     },
     interactions: {
       kicker: "Activity", title: "All Interactions", rows: function () { return all("interaction").sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); }); },
-      head: ["Due", "Interaction", "Company", "Type"],
+      head: ["Due", label("interaction"), label("company"), "Type"],
       cell: function (i) { return [{ num: i.date || "" }, link("interaction", i.id), i.company ? link("company", i.company) : "", esc(i.interaction_type || "")]; },
     },
     tasks: {
       kicker: "Tasks", title: "All Tasks", rows: function () { return all("task").sort(function (a, b) { return (a.due_date || "").localeCompare(b.due_date || ""); }); },
-      head: ["Task", "Priority", "Due", "Status"],
+      head: [label("task"), "Priority", "Due", "Status"],
       cell: function (t) { return [link("task", t.id, t.title || t.name), badge(t.priority || "medium", PRIO_KIND[t.priority]), { num: t.due_date || "—" }, badge(t.status || "todo", t.status === "done" ? "good" : "")]; },
     },
   };
@@ -340,11 +422,13 @@
     applyBrand();
     var type = new URLSearchParams(location.search).get("type");
     setActiveNav(type);
+    if (type && type.indexOf("obj:") === 0) return renderObjectList(type.slice(4));
     var cfg = LIST_CFG[type];
     if (!cfg) { mount('<h1>Not found</h1><p class="empty">Unknown list "' + esc(type || "") + '".</p><p><a href="index.html">← Home</a></p>'); return; }
-    document.title = cfg.title + " · CRM";
+    var sing = SINGULAR[type], ttl = sing ? "All " + label(sing, true) : cfg.title, kick = sing ? label(sing, true) : cfg.kicker;
+    document.title = ttl + " · CRM";
     var rows = cfg.rows();
-    mount('<p class="kicker">' + esc(cfg.kicker) + "</p><h1>" + esc(cfg.title) + ' <span class="count">· ' + rows.length + "</span></h1>" +
+    mount('<p class="kicker">' + esc(kick) + "</p><h1>" + esc(ttl) + ' <span class="count">· ' + rows.length + "</span></h1>" +
       (rows.length ? table(cfg.head, rows.map(cfg.cell)) : '<p class="empty">Nothing here yet.</p>'));
   }
 
@@ -364,6 +448,13 @@
         idx.push({ type: sing, id: id, name: nm, sub: sub, hay: (nm + " " + sub + " " + (e.email || "") + " " + (e.tags || []).join(" ")).toLowerCase() });
       });
     });
+    objectDefs().forEach(function (def) {
+      var b = bucket("obj:" + def.type);
+      Object.keys(b).forEach(function (id) {
+        var e = b[id], nm = e.name || id;
+        idx.push({ type: "obj:" + def.type, id: id, name: nm, sub: def.one || def.type, hay: (nm + " " + Object.keys(e.fields || {}).map(function (k) { return e.fields[k]; }).join(" ") + " " + (e.tags || []).join(" ")).toLowerCase() });
+      });
+    });
     return idx;
   }
   function wireSearch() {
@@ -380,8 +471,8 @@
       if (!q) return close();
       var hits = idx.filter(function (e) { return e.hay.indexOf(q) !== -1; }).slice(0, 8);
       box.innerHTML = hits.length ? hits.map(function (h) {
-        return '<a class="sr-item" href="' + href(h.type, h.id) + '">' + avatar(h.name, { size: 22, square: h.type === "company" }) +
-          '<span class="sr-main">' + esc(h.name) + "<small>" + esc(h.sub) + "</small></span><span class=\"badge\">" + esc(h.type) + "</span></a>";
+        return '<a class="sr-item" href="' + href(h.type, h.id) + '">' + avatar(h.name, { size: 22, square: h.type === "company" || h.type.indexOf("obj:") === 0 }) +
+          '<span class="sr-main">' + esc(h.name) + "<small>" + esc(h.sub) + "</small></span><span class=\"badge\">" + esc(label(h.type)) + "</span></a>";
       }).join("") : '<div class="sr-empty">No matches</div>';
       box.style.display = "block";
     }
@@ -396,33 +487,48 @@
   // ---- new (create an entity, written to data.js via serve.mjs) ------------
   function optList(type) { return all(type).sort(byName).map(function (e) { return { v: e.id, t: e.name }; }); }
   function formCfg() {
-    return {
-      contact: { label: "Contact", name: "name", fields: [
+    var base = {
+      contact: { label: label("contact"), name: "name", fields: [
         { k: "name", label: "Name", req: true }, { k: "email", label: "Email" }, { k: "role", label: "Role" },
-        { k: "company", label: "Company", sel: optList("company") }, { k: "status", label: "Status", sel: ["prospect", "active", "inactive", "churned"] }] },
-      company: { label: "Company", name: "name", fields: [
+        { k: "company", label: label("company"), sel: optList("company") }, { k: "status", label: "Status", sel: ["prospect", "active", "inactive", "churned"] }] },
+      company: { label: label("company"), name: "name", fields: [
         { k: "name", label: "Name", req: true }, { k: "industry", label: "Industry" }, { k: "location", label: "Location" },
         { k: "status", label: "Status", sel: ["prospect", "customer", "partner", "churned"] }, { k: "arr_potential", label: "ARR potential", num: true }] },
-      deal: { label: "Deal", name: "name", fields: [
-        { k: "name", label: "Deal name", req: true }, { k: "company", label: "Company", sel: optList("company") },
-        { k: "primary_contact", label: "Primary contact", sel: optList("contact") }, { k: "value", label: "Value", num: true },
-        { k: "stage", label: "Stage", sel: ["lead", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"] }, { k: "probability", label: "Probability %", num: true }] },
-      task: { label: "Task", name: "title", fields: [
+      deal: { label: label("deal"), name: "name", fields: [
+        { k: "name", label: label("deal") + " name", req: true }, { k: "company", label: label("company"), sel: optList("company") },
+        { k: "primary_contact", label: "Primary " + label("contact"), sel: optList("contact") }, { k: "value", label: "Value", num: true },
+        { k: "stage", label: "Stage", sel: allStages().map(function (s) { return { v: s, t: stageLabel(s) }; }) }, { k: "probability", label: "Probability %", num: true }] },
+      task: { label: label("task"), name: "title", fields: [
         { k: "title", label: "Title", req: true }, { k: "priority", label: "Priority", sel: ["high", "medium", "low"] },
         { k: "due_date", label: "Due date (YYYY-MM-DD)" }, { k: "status", label: "Status", sel: ["todo", "in-progress", "done"] }] },
     };
+    // Append the business's custom fields for each entity (stored on entity.fields).
+    Object.keys(base).forEach(function (t) {
+      fieldDefs(t).forEach(function (f) {
+        base[t].fields.push({ k: f.key, label: f.label || f.key, num: !!f.num, custom: true, sel: f.options || null });
+      });
+    });
+    return base;
   }
   function renderNew() {
     applyBrand(); setActiveNav(null);
     var cfgs = formCfg();
+    // One create form per custom object type too: name + its fields + links to core entities.
+    objectDefs().forEach(function (def) {
+      cfgs["obj:" + def.type] = { label: def.one || def.type, name: "name", obj: def.type, fields:
+        [{ k: "name", label: "Name", req: true }]
+          .concat((def.fields || []).map(function (f) { return { k: f.key, label: f.label || f.key, num: !!f.num, custom: true, sel: f.options || null }; }))
+          .concat((def.links || []).map(function (lt) { return { k: "link__" + lt, label: label(lt), sel: optList(lt), linkType: lt }; }))
+      };
+    });
     var type = new URLSearchParams(location.search).get("type") || "contact";
     if (!cfgs[type]) type = "contact";
     var cfg = cfgs[type];
-    var tabs = Object.keys(cfgs).map(function (t) { return '<a href="new.html?type=' + t + '" class="newtab' + (t === type ? " active" : "") + '">' + esc(cfgs[t].label) + "</a>"; }).join("");
+    var tabs = Object.keys(cfgs).map(function (t) { return '<a href="new.html?type=' + encodeURIComponent(t) + '" class="newtab' + (t === type ? " active" : "") + '">' + esc(cfgs[t].label) + "</a>"; }).join("");
     var fields = cfg.fields.map(function (f) {
       var input;
       if (f.sel) {
-        var os = Array.isArray(f.sel) ? f.sel.map(function (s) { return { v: s, t: s }; }) : f.sel;
+        var os = (f.sel || []).map(function (s) { return (s && typeof s === "object") ? s : { v: s, t: s }; });
         input = '<select id="f-' + f.k + '" class="inp"><option value="">—</option>' + os.map(function (o) { return '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; }).join("") + "</select>";
       } else input = '<input id="f-' + f.k + '" class="inp" type="text"' + (f.num ? ' inputmode="numeric"' : "") + ">";
       return '<label class="fld">' + esc(f.label) + (f.req ? ' <span style="color:var(--bad)">*</span>' : "") + "</label>" + input;
@@ -442,19 +548,65 @@
       var nameVal = valOf("f-" + cfg.name).trim();
       var status = document.getElementById("create-status");
       if (!nameVal) { status.textContent = "Name is required."; return; }
-      var id = slug(nameVal), entity = { type: type, id: id };
-      cfg.fields.forEach(function (f) { var v = valOf("f-" + f.k); if (v === "" || v == null) return; entity[f.k] = f.num ? Number(v) : v; });
+      var id = slug(nameVal), entity = { type: cfg.obj || type, id: id };
+      cfg.fields.forEach(function (f) {
+        var v = valOf("f-" + f.k); if (v === "" || v == null) return;
+        var val = f.num ? Number(v) : v;
+        if (f.linkType) { (entity.links = entity.links || {})[f.linkType] = [val]; }
+        else if (f.custom) { (entity.fields = entity.fields || {})[f.k] = val; }
+        else entity[f.k] = val;
+      });
       entity.name = (type === "task") ? entity.title : nameVal;
       entity.created = today(); entity.updated = today(); entity.sections = {};
       status.textContent = "Creating…";
-      fetch("__create", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: type, id: id, entity: entity }) })
+      var payload = cfg.obj ? { objType: cfg.obj, id: id, entity: entity } : { type: type, id: id, entity: entity };
+      var dest = cfg.obj ? "obj:" + cfg.obj : type;
+      fetch("__create", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })
         .then(function (r) { return r.ok ? r.json() : r.text().then(function (t) { throw new Error(t); }); })
-        .then(function (j) { status.textContent = "Created — opening…"; setTimeout(function () { location.href = href(type, j.id || id); }, 400); })
+        .then(function (j) { status.textContent = "Created — opening…"; setTimeout(function () { location.href = href(dest, j.id || id); }, 400); })
         .catch(function (e) {
           status.textContent = "Couldn't save.";
           document.getElementById("create-fallback").innerHTML = '<div class="callout" style="margin-top:14px">Creating writes to <code>data.js</code>, so the CRM must be served by <code>serve.mjs</code> (not a static server or <code>file://</code>). <br>' + esc(String((e && e.message) || e)) + "</div>";
         });
     });
+  }
+
+  // ---- custom object renderers ---------------------------------------------
+  function renderObject(def, e) {
+    var head = '<p class="kicker">' + esc(def.one || def.type) + '</p><h1 class="has-av">' + avatar(e.name, { size: 40, square: true }) + "<span>" + esc(e.name) + "</span></h1>";
+    var links = (def.links || []).map(function (lt) {
+      var ids = (e.links && e.links[lt]) || [];
+      return relatedBlock(label(lt, true), ids.map(function (id) { return link(lt, id); }));
+    }).join("");
+    mount(head + tagline(e) + fieldsDl(def.fields, e) + sectionsHtml(e) + links);
+  }
+  function renderObjectList(ot) {
+    var def = objectDef(ot);
+    if (!def) { mount('<h1>Not found</h1><p class="empty">Unknown type "' + esc(ot) + '".</p><p><a href="index.html">← Home</a></p>'); return; }
+    var b = bucket("obj:" + ot);
+    var rows = Object.keys(b).map(function (id) { return b[id]; }).sort(byName);
+    var fcols = (def.fields || []).slice(0, 4);
+    var cols = ["Name"].concat(fcols.map(function (f) { return f.label || f.key; }));
+    var body = rows.map(function (r) {
+      return [avatarLink("obj:" + ot, r.id, true)].concat(fcols.map(function (f) {
+        var v = r.fields && r.fields[f.key];
+        return f.num ? { num: (v != null && v !== "" ? Number(v).toLocaleString("en-US") : "—") } : esc(v == null ? "" : v);
+      }));
+    });
+    document.title = "All " + (def.many || ot) + " · CRM";
+    mount('<p class="kicker">' + esc(def.many || ot) + '</p><h1>All ' + esc(def.many || ot) + ' <span class="count">· ' + rows.length + "</span></h1>" +
+      (rows.length ? table(cols, body) : '<p class="empty">Nothing here yet.</p>'));
+  }
+  // Custom objects that point at a given core entity (reverse links).
+  function objBacklinks(coreType, id) {
+    var out = "";
+    objectDefs().forEach(function (def) {
+      if ((def.links || []).indexOf(coreType) === -1) return;
+      var b = bucket("obj:" + def.type);
+      var hits = Object.keys(b).map(function (k) { return b[k]; }).filter(function (r) { return ((r.links && r.links[coreType]) || []).indexOf(id) !== -1; });
+      if (hits.length) out += relatedBlock(def.many || def.type, hits.map(function (r) { return link("obj:" + def.type, r.id); }));
+    });
+    return out;
   }
 
   // ---- router --------------------------------------------------------------
@@ -464,10 +616,19 @@
     setActiveNav(null);
     var q = new URLSearchParams(location.search);
     var type = q.get("type"), id = q.get("id");
+    if (type && type.indexOf("obj:") === 0) {
+      var def = objectDef(type.slice(4)), oe = get(type, id);
+      if (!def || !oe) { mount('<h1>Not found</h1><p class="empty">No ' + esc(type) + ' with id "' + esc(id || "") + '".</p><p><a href="index.html">← Home</a></p>'); return; }
+      setActiveNav(type);
+      document.title = oe.name + " · CRM";
+      renderObject(def, oe); return;
+    }
     var e = get(type, id);
     if (!e) { mount('<h1>Not found</h1><p class="empty">No ' + esc(type || "entity") + ' with id "' + esc(id || "") + '".</p><p><a href="index.html">← Home</a></p>'); return; }
     document.title = e.name + " · CRM";
     DISPATCH[type](e);
+    var bl = objBacklinks(type, id);
+    if (bl) { var app = document.getElementById("app"); if (app) app.innerHTML += bl; }
   }
 
   // ---- settings (in-app branding editor) -----------------------------------
