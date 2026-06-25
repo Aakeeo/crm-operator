@@ -1,0 +1,11 @@
+{
+  "name": "crm-operator",
+  "displayName": "CRM Operator",
+  "description": "Maintain a personal CRM as a self-contained folder of HTML. Onboards to your business, imports from CSV/HubSpot/Pipedrive/Salesforce, files notes into contacts/companies/deals, and tracks your pipeline.",
+  "author": { "name": "Aakeeo", "url": "https://github.com/Aakeeo" },
+  "homepage": "https://github.com/Aakeeo/crm-operator",
+  "repository": "https://github.com/Aakeeo/crm-operator",
+  "license": "MIT",
+  "keywords": ["crm", "sales", "pipeline", "contacts", "deals"],
+  "hooks": "./hooks/hooks.json"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "crm-operator",
+  "owner": { "name": "Aakeeo" },
+  "plugins": [
+    {
+      "name": "crm-operator",
+      "source": ".",
+      "description": "Maintain a personal CRM as a self-contained folder of HTML — onboarding, CSV/HubSpot/Pipedrive import, note ingest, pipeline tracking.",
+      "author": { "name": "Aakeeo" },
+      "keywords": ["crm", "sales", "pipeline"]
+    }
+  ]
+}

@@ -23,15 +23,32 @@ just drop the `--agent` flag to pick interactively.
 > reads from `.claude/skills/`, so you need a link: `ln -s ../.agents/skills .claude/skills`
 > (or just use `--agent claude-code` above, which copies directly and avoids this).
 
+### Or install as a Claude Code plugin
+
+The same repo is also a Claude Code **plugin**, which adds slash commands and an
+auto-serve hook on top of the skill:
+
+```
+/plugin marketplace add Aakeeo/crm-operator
+/plugin install crm-operator@crm-operator
+```
+
+You get `/crm-operator:crm` (onboarding), `:import`, `:ingest`, `:serve`, `:lint`, and
+a SessionStart hook that brings the local server up automatically whenever you open a
+vault folder. The plugin auto-updates per commit.
+
 ## Quick start
 
 In your agent, just say:
 
 > "Set up a new CRM here."
 
-It asks what your **business is called** (and an optional brand color), scaffolds a vault,
+It **interviews you about your business** — what you sell, what you call your "deals" and
+"contacts", your pipeline stages, the fields that matter, anything custom you track — and
+tailors the CRM's vocabulary, stages, and structure to fit. Then it scaffolds a vault,
 **serves it at `http://127.0.0.1:8787`**, and themes the whole UI around your brand. Then you can:
 
+- **Import** — bring your existing data from a CSV / HubSpot / Pipedrive / Salesforce / Power BI export.
 - **Ingest** — "Process these meeting notes" → it files every contact/company/deal/task.
 - **Query** — "What's my open pipeline?" / "What follow-ups are overdue?"
 - **Update** — "Move the Northwind deal to negotiation."
